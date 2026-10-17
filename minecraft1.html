@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>My Block Game</title>
+<style>
+  body{margin:0;overflow:hidden;font-family:sans-serif;background:#87ceeb}
+  #hud{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px}
+  .slot{width:48px;height:48px;border:3px solid rgba(255,255,255,.5);box-sizing:border-box}
+  .slot.on{border-color:#fff;transform:scale(1.15)}
+  #cross{position:fixed;top:50%;left:50%;width:12px;height:12px;margin:-6px;border:2px solid #fff;border-radius:50%;mix-blend-mode:difference;pointer-events:none}
+  #msg{position:fixed;top:35%;width:100%;text-align:center;color:#fff;font-size:22px;line-height:1.6;text-shadow:0 0 6px #000;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="msg">Click to play!<br>W A S D = walk &middot; Space = jump<br>Left click = break &middot; Right click = place<br>Keys 1-5 = pick a block</div>
+<div id="cross"></div>
+<div id="hud"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ---------- SETTINGS ----------
+const W = 64, H = 32, CS = 16;               // world width, height, chunk size
+const COLORS = {1:0x5fa83a, 2:0x8b5a2b, 3:0x888888, 4:0xc9a66b, 5:0xe3d28a}; // grass, dirt, stone, wood, sand
+const world = new Uint8Array(W * H * W);
+
+const inside = (x,y,z) => x>=0 && x<W && y>=0 && y<H && z>=0 && z<W;
+const get = (x,y,z) => inside(x,y,z) ? world[x + W*(z + W*y)] : 0;
+const put = (x,y,z,v) => { if (inside(x,y,z)) world[x + W*(z + W*y)] = v; };
+
+// ---------- TERRAIN (bumpy hills using "noise") ----------
+function hash(x,z){ const n = Math.sin(x*127.1 + z*311.7) * 43758.5453; return n - Math.floor(n); }
+function noise(x,z){
+  const xi=Math.floor(x), zi=Math.floor(z), xf=x-xi, zf=z-zi;
+  const s = t => t*t*(3-2*t);
+  const a=hash(xi,zi), b=hash(xi+1,zi), c=hash(xi,zi+1), d=hash(xi+1,zi+1);
+  const u=s(xf), v=s(zf);
+  return a + (b-a)*u + (c-a)*v + (a-b-c+d)*u*v;
+}
+const heightAt = (x,z) => Math.floor(6 + noise(x/16,z/16)*10 + noise(x/6,z/6)*3);
+
+for (let x=0; x<W; x++) for (let z=0; z<W; z++) {
+  const h = heightAt(x,z);
+  for (let y=0; y<=h; y++) {
+    let b = 3;                                  // stone deep down
+    if (y > h-3) b = 2;                         // dirt near the top
+    if (y === h) b = h < 9 ? 5 : 1;             // sand low down, grass higher up
+    put(x,y,z,b);
+  }
+}
+
+// ---------- SCENE ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.rotation.order = 'YXZ';
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- CHUNK MESHES (only draw faces that touch air) ----------
+const FACES = [
+  {d:[1,0,0],  c:[[1,0,1],[1,0,0],[1,1,0],[1,1,1]], s:.8},
+  {d:[-1,0,0], c:[[0,0,0],[0,0,1],[0,1,1],[0,1,0]], s:.8},
+  {d:[0,1,0],  c:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]], s:1},
+  {d:[0,-1,0], c:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]], s:.5},
+  {d:[0,0,1],  c:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]], s:.9},
+  {d:[0,0,-1], c:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]], s:.9}
+];
+const material = new THREE.MeshBasicMaterial({vertexColors:true});
+const meshes = {};
+
+function buildChunk(cx, cz) {
+  const pos = [], col = [], ind = [];
+  for (let x=cx*CS; x<(cx+1)*CS; x++)
+  for (let z=cz*CS; z<(cz+1)*CS; z++)
+  for (let y=0; y<H; y++) {
+    const b = get(x,y,z); if (!b) continue;
+    const color = new THREE.Color(COLORS[b]);
+    for (const f of FACES) {
+      if (get(x+f.d[0], y+f.d[1], z+f.d[2])) continue;  // hidden face, skip!
+      const start = pos.length/3;
+      for (const c of f.c) {
+        pos.push(x+c[0], y+c[1], z+c[2]);
+        col.push(color.r*f.s, color.g*f.s, color.b*f.s);
+      }
+      ind.push(start,start+1,start+2, start,start+2,start+3);
+    }
+  }
+  const key = cx+','+cz;
+  if (meshes[key]) { scene.remove(meshes[key]); meshes[key].geometry.dispose(); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
+  g.setIndex(ind);
+  meshes[key] = new THREE.Mesh(g, material);
+  scene.add(meshes[key]);
+}
+for (let cx=0; cx<W/CS; cx++) for (let cz=0; cz<W/CS; cz++) buildChunk(cx,cz);
+
+function setBlock(x,y,z,v) {
+  put(x,y,z,v);
+  const cx=Math.floor(x/CS), cz=Math.floor(z/CS);
+  buildChunk(cx,cz);
+  // rebuild neighbours if we touched a chunk edge
+  if (x%CS===0 && cx>0) buildChunk(cx-1,cz);
+  if (x%CS===CS-1 && cx<W/CS-1) buildChunk(cx+1,cz);
+  if (z%CS===0 && cz>0) buildChunk(cx,cz-1);
+  if (z%CS===CS-1 && cz<W/CS-1) buildChunk(cx,cz+1);
+}
+
+// ---------- PLAYER ----------
+const player = { x:W/2, y:heightAt(W/2,W/2)+3, z:W/2, vx:0, vy:0, vz:0, onGround:false, yaw:0, pitch:0 };
+const R = 0.3, HEIGHT = 1.8;
+function hits(x,y,z) {
+  for (let i=Math.floor(x-R); i<=Math.floor(x+R); i++)
+  for (let j=Math.floor(y); j<=Math.floor(y+HEIGHT); j++)
+  for (let k=Math.floor(z-R); k<=Math.floor(z+R); k++)
+    if (get(i,j,k)) return true;
+  return false;
+}
+
+// ---------- CONTROLS ----------
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code >= 'Digit1' && e.code <= 'Digit5') select(+e.code.slice(5)-1);
+});
+addEventListener('keyup', e => keys[e.code] = false);
+
+const msg = document.getElementById('msg');
+renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
+document.addEventListener('pointerlockchange', () => {
+  msg.style.display = document.pointerLockElement ? 'none' : 'block';
+});
+document.addEventListener('mousemove', e => {
+  if (!document.pointerLockElement) return;
+  player.yaw -= e.movementX * 0.002;
+  player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch - e.movementY * 0.002));
+});
+addEventListener('contextmenu', e => e.preventDefault());
+
+// ---------- HOTBAR ----------
+const hud = document.getElementById('hud');
+let selected = 0;
+const slots = [1,2,3,4,5].map(b => {
+  const d = document.createElement('div');
+  d.className = 'slot';
+  d.style.background = '#' + COLORS[b].toString(16).padStart(6,'0');
+  hud.appendChild(d);
+  return d;
+});
+function select(i){ selected = i; slots.forEach((s,n) => s.classList.toggle('on', n===i)); }
+select(0);
+addEventListener('wheel', e => select((selected + (e.deltaY>0?1:4)) % 5));
+
+// ---------- BREAK & PLACE ----------
+function aim() {
+  const dir = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
+  let prev = null;
+  for (let t=0; t<6; t+=0.05) {
+    const x = Math.floor(camera.position.x + dir.x*t);
+    const y = Math.floor(camera.position.y + dir.y*t);
+    const z = Math.floor(camera.position.z + dir.z*t);
+    if (get(x,y,z)) return {hit:[x,y,z], prev};
+    prev = [x,y,z];
+  }
+  return null;
+}
+addEventListener('mousedown', e => {
+  if (!document.pointerLockElement) return;
+  const a = aim(); if (!a) return;
+  if (e.button === 0) setBlock(...a.hit, 0);                    // break
+  if (e.button === 2 && a.prev) {                               // place
+    setBlock(...a.prev, selected+1);
+    if (hits(player.x, player.y, player.z)) setBlock(...a.prev, 0); // don't trap yourself
+  }
+});
+
+// ---------- GAME LOOP ----------
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min((now-last)/1000, 0.05); last = now;
+
+  const fwd = (keys.KeyW?1:0) - (keys.KeyS?1:0);
+  const side = (keys.KeyD?1:0) - (keys.KeyA?1:0);
+  const speed = 5;
+  const sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
+  player.vx = (-sin*fwd + cos*side) * speed;
+  player.vz = (-cos*fwd - sin*side) * speed;
+  if (keys.Space && player.onGround) { player.vy = 8; player.onGround = false; }
+  player.vy -= 25 * dt;                                         // gravity
+
+  // move one direction at a time so we slide along walls
+  if (!hits(player.x + player.vx*dt, player.y, player.z)) player.x += player.vx*dt;
+  if (!hits(player.x, player.y, player.z + player.vz*dt)) player.z += player.vz*dt;
+  const ny = player.y + player.vy*dt;
+  if (!hits(player.x, ny, player.z)) { player.y = ny; player.onGround = false; }
+  else { if (player.vy < 0) player.onGround = true; player.vy = 0; }
+
+  if (player.y < -20) { player.x = W/2; player.z = W/2; player.y = heightAt(W/2,W/2)+3; player.vy = 0; }
+
+  camera.position.set(player.x, player.y + 1.6, player.z);
+  camera.rotation.set(player.pitch, player.yaw, 0);
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
