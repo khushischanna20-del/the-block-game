@@ -11,26 +11,28 @@
   .slot{width:48px;height:48px;border:3px solid rgba(255,255,255,.5);box-sizing:border-box}
   .slot.on{border-color:#fff;transform:scale(1.15)}
   #cross{position:fixed;top:50%;left:50%;width:12px;height:12px;margin:-6px;border:2px solid #fff;border-radius:50%;mix-blend-mode:difference;pointer-events:none}
-  #msg{position:fixed;top:35%;width:100%;text-align:center;color:#fff;font-size:22px;line-height:1.6;text-shadow:0 0 6px #000;pointer-events:none}
+  #msg{position:fixed;top:30%;width:100%;text-align:center;color:#fff;font-size:22px;line-height:1.6;text-shadow:0 0 6px #000;pointer-events:none}
+  #map{position:fixed;top:10px;right:10px;border:3px solid #fff;border-radius:6px;image-rendering:pixelated;background:#000}
 </style>
 </head>
 <body>
-<div id="msg">Click to play!<br>W A S D = walk &middot; Space = jump<br>Left click = break &middot; Right click = place<br>Keys 1-5 = pick a block</div>
+<div id="msg">Click to play!<br>W A S D = walk &middot; Space = jump<br>Mouse or arrow keys = look around<br>Left click = break &middot; Right click = place<br>1-5 = pick a block &middot; M = big map</div>
 <div id="cross"></div>
+<canvas id="map"></canvas>
 <div id="hud"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ---------- SETTINGS ----------
-const W = 64, H = 32, CS = 16;               // world width, height, chunk size
-const COLORS = {1:0x5fa83a, 2:0x8b5a2b, 3:0x888888, 4:0xc9a66b, 5:0xe3d28a}; // grass, dirt, stone, wood, sand
+const W = 64, H = 32, CS = 16;
+const COLORS = {1:0x5fa83a, 2:0x8b5a2b, 3:0x888888, 4:0xc9a66b, 5:0xe3d28a};
 const world = new Uint8Array(W * H * W);
-
 const inside = (x,y,z) => x>=0 && x<W && y>=0 && y<H && z>=0 && z<W;
 const get = (x,y,z) => inside(x,y,z) ? world[x + W*(z + W*y)] : 0;
 const put = (x,y,z,v) => { if (inside(x,y,z)) world[x + W*(z + W*y)] = v; };
+function topY(x,z){ x=Math.floor(x); z=Math.floor(z); for (let y=H-1; y>=0; y--) if (get(x,y,z)) return y; return -1; }
 
-// ---------- TERRAIN (bumpy hills using "noise") ----------
+// ---------- TERRAIN ----------
 function hash(x,z){ const n = Math.sin(x*127.1 + z*311.7) * 43758.5453; return n - Math.floor(n); }
 function noise(x,z){
   const xi=Math.floor(x), zi=Math.floor(z), xf=x-xi, zf=z-zi;
@@ -40,22 +42,22 @@ function noise(x,z){
   return a + (b-a)*u + (c-a)*v + (a-b-c+d)*u*v;
 }
 const heightAt = (x,z) => Math.floor(6 + noise(x/16,z/16)*10 + noise(x/6,z/6)*3);
-
 for (let x=0; x<W; x++) for (let z=0; z<W; z++) {
   const h = heightAt(x,z);
   for (let y=0; y<=h; y++) {
-    let b = 3;                                  // stone deep down
-    if (y > h-3) b = 2;                         // dirt near the top
-    if (y === h) b = h < 9 ? 5 : 1;             // sand low down, grass higher up
+    let b = 3;
+    if (y > h-3) b = 2;
+    if (y === h) b = h < 9 ? 5 : 1;
     put(x,y,z,b);
   }
 }
 
-// ---------- SCENE ----------
+// ---------- SCENE & SKY ----------
+const DAY_SKY = new THREE.Color(0x87ceeb), NIGHT_SKY = new THREE.Color(0x0b1030);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+scene.background = new THREE.Color(DAY_SKY);
 scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 250);
 camera.rotation.order = 'YXZ';
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight);
@@ -65,7 +67,11 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// ---------- CHUNK MESHES (only draw faces that touch air) ----------
+// the sun!
+const sun = new THREE.Mesh(new THREE.SphereGeometry(6,16,16), new THREE.MeshBasicMaterial({color:0xfff3a0, fog:false}));
+scene.add(sun);
+
+// ---------- CHUNK MESHES ----------
 const FACES = [
   {d:[1,0,0],  c:[[1,0,1],[1,0,0],[1,1,0],[1,1,1]], s:.8},
   {d:[-1,0,0], c:[[0,0,0],[0,0,1],[0,1,1],[0,1,0]], s:.8},
@@ -76,7 +82,6 @@ const FACES = [
 ];
 const material = new THREE.MeshBasicMaterial({vertexColors:true});
 const meshes = {};
-
 function buildChunk(cx, cz) {
   const pos = [], col = [], ind = [];
   for (let x=cx*CS; x<(cx+1)*CS; x++)
@@ -85,7 +90,7 @@ function buildChunk(cx, cz) {
     const b = get(x,y,z); if (!b) continue;
     const color = new THREE.Color(COLORS[b]);
     for (const f of FACES) {
-      if (get(x+f.d[0], y+f.d[1], z+f.d[2])) continue;  // hidden face, skip!
+      if (get(x+f.d[0], y+f.d[1], z+f.d[2])) continue;
       const start = pos.length/3;
       for (const c of f.c) {
         pos.push(x+c[0], y+c[1], z+c[2]);
@@ -105,15 +110,88 @@ function buildChunk(cx, cz) {
 }
 for (let cx=0; cx<W/CS; cx++) for (let cz=0; cz<W/CS; cz++) buildChunk(cx,cz);
 
+// ---------- MAP (top-down picture of the world) ----------
+const off = document.createElement('canvas'); off.width = off.height = W;
+const offCtx = off.getContext('2d');
+const img = offCtx.createImageData(W, W);
+function paintCol(x,z){
+  const y = topY(x,z), i = (z*W + x)*4;
+  const c = new THREE.Color(y < 0 ? 0 : COLORS[get(x,y,z)]);
+  const shade = 0.55 + 0.45 * Math.min(1, y/20);
+  img.data[i] = c.r*255*shade; img.data[i+1] = c.g*255*shade; img.data[i+2] = c.b*255*shade; img.data[i+3] = 255;
+}
+for (let x=0; x<W; x++) for (let z=0; z<W; z++) paintCol(x,z);
+offCtx.putImageData(img,0,0);
+const mc = document.getElementById('map'), mctx = mc.getContext('2d');
+let bigMap = false;
+function sizeMap(){ mc.width = mc.height = bigMap ? 420 : 160; }
+sizeMap();
+
+function drawMap(){
+  const S = mc.width / W;
+  mctx.imageSmoothingEnabled = false;
+  mctx.drawImage(off, 0, 0, mc.width, mc.height);
+  mctx.fillStyle = '#fff';
+  for (const a of animals) { mctx.fillRect(a.g.position.x*S-2, a.g.position.z*S-2, 4, 4); }
+  // player arrow
+  const px = player.x*S, pz = player.z*S, dx = -Math.sin(player.yaw), dz = -Math.cos(player.yaw);
+  mctx.fillStyle = '#e22';
+  mctx.beginPath();
+  mctx.moveTo(px + dx*9, pz + dz*9);
+  mctx.lineTo(px - dx*5 - dz*5, pz - dz*5 + dx*5);
+  mctx.lineTo(px - dx*5 + dz*5, pz - dz*5 - dx*5);
+  mctx.fill();
+}
+
 function setBlock(x,y,z,v) {
   put(x,y,z,v);
+  paintCol(x,z); offCtx.putImageData(img,0,0);
   const cx=Math.floor(x/CS), cz=Math.floor(z/CS);
   buildChunk(cx,cz);
-  // rebuild neighbours if we touched a chunk edge
   if (x%CS===0 && cx>0) buildChunk(cx-1,cz);
   if (x%CS===CS-1 && cx<W/CS-1) buildChunk(cx+1,cz);
   if (z%CS===0 && cz>0) buildChunk(cx,cz-1);
   if (z%CS===CS-1 && cz<W/CS-1) buildChunk(cx,cz+1);
+}
+
+// ---------- ANIMALS ----------
+const TYPES = {
+  pig:   {body:0xf0a0a8, head:0xf0a0a8, s:[.55,.45,.85]},
+  cow:   {body:0x5a3a22, head:0xf0f0f0, s:[.65,.6,1.05]},
+  sheep: {body:0xf2f2f2, head:0x333333, s:[.6,.5,.75]}
+};
+const animals = [];
+function makeAnimal(type, x, z){
+  const t = TYPES[type], g = new THREE.Group(), [w,h,d] = t.s;
+  const box = (bw,bh,bd,c,px,py,pz) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd), new THREE.MeshBasicMaterial({color:c}));
+    m.position.set(px,py,pz); g.add(m);
+  };
+  box(w,h,d,t.body,0,.35+h/2,0);                       // body
+  box(.38,.38,.38,t.head,0,.35+h+.02,-d/2-.12);        // head (front is -z)
+  for (const lx of [-1,1]) for (const lz of [-1,1]) box(.14,.35,.14,0x444444,lx*w/2.5,.175,lz*d/2.5); // legs
+  g.position.set(x, topY(x,z)+1, z);
+  scene.add(g);
+  animals.push({g, dir:Math.random()*6.28, timer:0, moving:false});
+}
+let tries = 0;
+while (animals.length < 16 && tries++ < 500) {
+  const x = Math.random()*(W-4)+2, z = Math.random()*(W-4)+2;
+  if (topY(x,z) >= 9) makeAnimal(['pig','cow','sheep'][animals.length%3], x, z);   // only on grass
+}
+function updateAnimals(dt){
+  for (const a of animals) {
+    a.timer -= dt;
+    if (a.timer < 0) { a.timer = 1 + Math.random()*3; a.moving = Math.random() > 0.35; a.dir += (Math.random()-.5)*2.5; }
+    const p = a.g.position;
+    if (a.moving) {
+      const nx = p.x - Math.sin(a.dir)*1.2*dt, nz = p.z - Math.cos(a.dir)*1.2*dt;
+      const ok = nx>1 && nx<W-1 && nz>1 && nz<W-1 && Math.abs(topY(nx,nz)+1 - p.y) <= 1 && topY(nx,nz) >= 9;
+      if (ok) { p.x = nx; p.z = nz; } else { a.dir += 1.6 + Math.random(); }
+    }
+    p.y = topY(p.x,p.z) + 1;
+    a.g.rotation.y = a.dir;
+  }
 }
 
 // ---------- PLAYER ----------
@@ -131,15 +209,14 @@ function hits(x,y,z) {
 const keys = {};
 addEventListener('keydown', e => {
   keys[e.code] = true;
+  if (e.code.startsWith('Arrow')) e.preventDefault();
   if (e.code >= 'Digit1' && e.code <= 'Digit5') select(+e.code.slice(5)-1);
+  if (e.code === 'KeyM') { bigMap = !bigMap; sizeMap(); }
 });
 addEventListener('keyup', e => keys[e.code] = false);
-
 const msg = document.getElementById('msg');
 renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
-document.addEventListener('pointerlockchange', () => {
-  msg.style.display = document.pointerLockElement ? 'none' : 'block';
-});
+document.addEventListener('pointerlockchange', () => { msg.style.display = document.pointerLockElement ? 'none' : 'block'; });
 document.addEventListener('mousemove', e => {
   if (!document.pointerLockElement) return;
   player.yaw -= e.movementX * 0.002;
@@ -177,40 +254,52 @@ function aim() {
 addEventListener('mousedown', e => {
   if (!document.pointerLockElement) return;
   const a = aim(); if (!a) return;
-  if (e.button === 0) setBlock(...a.hit, 0);                    // break
-  if (e.button === 2 && a.prev) {                               // place
+  if (e.button === 0) setBlock(...a.hit, 0);
+  if (e.button === 2 && a.prev) {
     setBlock(...a.prev, selected+1);
-    if (hits(player.x, player.y, player.z)) setBlock(...a.prev, 0); // don't trap yourself
+    if (hits(player.x, player.y, player.z)) setBlock(...a.prev, 0);
   }
 });
 
 // ---------- GAME LOOP ----------
-let last = performance.now();
+let last = performance.now(), clock = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min((now-last)/1000, 0.05); last = now;
+  clock += dt;
 
-  const fwd = (keys.KeyW?1:0) - (keys.KeyS?1:0);
-  const side = (keys.KeyD?1:0) - (keys.KeyA?1:0);
-  const speed = 5;
+  // look with arrow keys
+  player.yaw   += ((keys.ArrowLeft?1:0) - (keys.ArrowRight?1:0)) * 2 * dt;
+  player.pitch  = Math.max(-1.5, Math.min(1.5, player.pitch + ((keys.ArrowUp?1:0) - (keys.ArrowDown?1:0)) * 1.5 * dt));
+
+  // walking
+  const fwd = (keys.KeyW?1:0) - (keys.KeyS?1:0), side = (keys.KeyD?1:0) - (keys.KeyA?1:0);
   const sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
-  player.vx = (-sin*fwd + cos*side) * speed;
-  player.vz = (-cos*fwd - sin*side) * speed;
+  player.vx = (-sin*fwd + cos*side) * 5;
+  player.vz = (-cos*fwd - sin*side) * 5;
   if (keys.Space && player.onGround) { player.vy = 8; player.onGround = false; }
-  player.vy -= 25 * dt;                                         // gravity
-
-  // move one direction at a time so we slide along walls
+  player.vy -= 25 * dt;
   if (!hits(player.x + player.vx*dt, player.y, player.z)) player.x += player.vx*dt;
   if (!hits(player.x, player.y, player.z + player.vz*dt)) player.z += player.vz*dt;
   const ny = player.y + player.vy*dt;
   if (!hits(player.x, ny, player.z)) { player.y = ny; player.onGround = false; }
   else { if (player.vy < 0) player.onGround = true; player.vy = 0; }
-
   if (player.y < -20) { player.x = W/2; player.z = W/2; player.y = heightAt(W/2,W/2)+3; player.vy = 0; }
+
+  updateAnimals(dt);
+
+  // day & night: the sun circles the sky (full day = 2 minutes)
+  const ang = clock/120*Math.PI*2 + 0.8;
+  const daylight = Math.max(0, Math.min(1, Math.sin(ang)*2 + 0.5));
+  scene.background.copy(NIGHT_SKY).lerp(DAY_SKY, daylight);
+  scene.fog.color.copy(scene.background);
+  material.color.setScalar(0.3 + 0.7*daylight);
+  sun.position.set(camera.position.x + Math.cos(ang)*100, camera.position.y + Math.sin(ang)*100, camera.position.z - 20);
 
   camera.position.set(player.x, player.y + 1.6, player.z);
   camera.rotation.set(player.pitch, player.yaw, 0);
   renderer.render(scene, camera);
+  drawMap();
 }
 requestAnimationFrame(loop);
 </script>
