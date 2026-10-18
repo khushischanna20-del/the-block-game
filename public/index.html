@@ -14,20 +14,29 @@
   .slot b{position:absolute;top:0;left:2px;font-size:10px;color:#fff;text-shadow:0 0 2px #000}
   .slot.on{border-color:#fff;transform:scale(1.15)}
   #label{position:fixed;bottom:68px;width:100%;text-align:center;color:#fff;font-size:16px;text-shadow:0 0 4px #000;pointer-events:none}
+  #stats{position:fixed;top:10px;left:10px;color:#fff;font-size:18px;line-height:1.5;text-shadow:0 0 4px #000;pointer-events:none}
+  #toast{position:fixed;top:70px;width:100%;text-align:center;color:#ff8;font-size:20px;text-shadow:0 0 4px #000;pointer-events:none}
+  #look{position:fixed;left:10px;top:10px;bottom:10px;width:290px;overflow:auto;background:rgba(0,0,0,.72);color:#fff;padding:12px 14px;display:none;z-index:4;border-radius:8px;font-size:14px}
+  #look h2{margin:0 0 4px} .lk-t{margin:12px 0 5px;opacity:.85} .lk-box{display:flex;gap:6px;flex-wrap:wrap}
+  .lk-c{width:30px;height:30px;border:3px solid transparent;border-radius:4px;cursor:pointer}
+  .lk-b{padding:6px 9px;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;border-radius:4px;cursor:pointer}
+  #look .on{border-color:#fff!important;box-shadow:0 0 6px #fff} #look button.big{margin-top:14px;width:100%;padding:8px;font-size:15px}
   #cross{position:fixed;top:50%;left:50%;width:12px;height:12px;margin:-6px;border:2px solid #fff;border-radius:50%;mix-blend-mode:difference;pointer-events:none}
-  #msg{position:fixed;top:30%;width:100%;text-align:center;color:#fff;font-size:22px;line-height:1.6;text-shadow:0 0 6px #000;pointer-events:none}
+  #msg{position:fixed;top:25%;width:100%;text-align:center;color:#fff;font-size:22px;line-height:1.6;text-shadow:0 0 6px #000;pointer-events:none}
   #map{position:fixed;top:10px;right:10px;border:3px solid #fff;border-radius:6px;background:#000}
   #inv{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;z-index:4}
-  #items{display:grid;grid-template-columns:repeat(5,86px);gap:10px;margin:14px 0 90px}
+  #items{display:grid;grid-template-columns:repeat(6,86px);gap:10px;margin:14px 0 90px}
   .item{background:rgba(255,255,255,.12);border:3px solid rgba(255,255,255,.3);padding:8px 0;text-align:center;font-size:13px;cursor:pointer}
   .item:hover{border-color:#fff;background:rgba(255,255,255,.25)}
   .item canvas{width:56px;height:56px;display:block;margin:0 auto 4px}
 </style>
 </head>
 <body>
-<div id="msg">Click to play!<br>W A S D = walk &middot; Space = jump<br>Mouse or arrow keys = look around<br>Left click = break &middot; Right click = place<br>1-9 = pick a slot &middot; E = inventory &middot; M = big map</div>
+<div id="msg">Click to play!<br>W A S D = walk &middot; Space = jump<br>Look: mouse, arrow keys, or I J K L (up, left, down, right)<br>Left click = break / hit animals &middot; Right click = place / talk to villagers<br>1-9 = slot &middot; E = inventory &middot; F = eat &middot; M = big map<br>Find the village on the map (yellow dots)!<br>Right-click a wild dog 🐶 or cat 🐱 with meat to tame it<br>T = place your teddy 🧸<br>Right-click a bed at night to sleep &middot; right-click the bathtub for a bath 🛁<br>V = camera &middot; C = change your avatar 🎨<br>Your tamed lion 🦁 Aryan follows you. Right-click him to stay / follow! Press G next to him to RIDE him!<br>🦁🐘 ZOO: press Z to travel there (purple dots on the map), H to come home. Feed zoo animals apples!<br>🌅 PRIDE ROCK: press P to travel there (orange dots on the map). Meet the whole pride and their friends!<br>🌾 The whole world is a savanna now! Look for zebra, giraffe and elephant herds on the plains.<br>🏰 YOUR MANSION: press O to go home to your own mansion, with Aryan's den and a garden!</div>
 <div id="cross"></div>
 <canvas id="map"></canvas>
+<div id="stats"></div>
+<div id="toast"></div>
 <div id="label"></div>
 <div id="inv"><h2 style="margin:0">Inventory</h2><div>Click a block to put it in your selected slot</div><div id="items"></div></div>
 <div id="hud"></div>
@@ -35,15 +44,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ---------- SETTINGS ----------
-const W = 64, H = 32, CS = 16;
+const W = 160, H = 32, CS = 16;      // world is 160 x 160 blocks (was 96)
 // block id: [name, top tile, side tile, bottom tile, map colour]
 const BLOCKS = {
-  1:['Grass',0,1,2,0x5fa83a], 2:['Dirt',2,2,2,0x86603c], 3:['Stone',3,3,3,0x7d7d7d],
+  1:['Grass',0,1,2,0xc4b054], 2:['Dirt',2,2,2,0x9c6840], 3:['Stone',3,3,3,0x7d7d7d],
   4:['Cobblestone',4,4,4,0x6e6e6e], 5:['Sand',5,5,5,0xe1d296], 6:['Log',7,6,7,0x6b4b28],
-  7:['Planks',8,8,8,0xaa8750], 8:['Leaves',9,9,9,0x328228], 9:['Glass',10,10,10,0xc8e6f0], 10:['Brick',11,11,11,0x964637]
+  7:['Planks',8,8,8,0xaa8750], 8:['Leaves',9,9,9,0x698c32], 9:['Glass',10,10,10,0xc8e6f0],
+  10:['Brick',11,11,11,0x964637], 11:['Wheat',12,12,12,0xd7b946], 12:['Bed',13,14,8,0xc02830], 13:['Bathtub',16,15,15,0xf0f0f0]
 };
 const SEE_THROUGH = {8:true, 9:true};
-const NTILES = 12;
+const NTILES = 17;
 const world = new Uint8Array(W * H * W);
 const inside = (x,y,z) => x>=0 && x<W && y>=0 && y<H && z>=0 && z<W;
 const get = (x,y,z) => inside(x,y,z) ? world[x + W*(z + W*y)] : 0;
@@ -51,24 +61,29 @@ const put = (x,y,z,v) => { if (inside(x,y,z)) world[x + W*(z + W*y)] = v; };
 function topY(x,z){ x=Math.floor(x); z=Math.floor(z); for (let y=H-1; y>=0; y--) if (get(x,y,z)) return y; return -1; }
 const grassAt = (x,z) => get(Math.floor(x), topY(x,z), Math.floor(z)) === 1;
 
-// ---------- PIXEL TEXTURES (painted by code, Minecraft style) ----------
+// ---------- PIXEL TEXTURES ----------
 let seed = 7; const rnd = () => (seed = seed*16807 % 2147483647) / 2147483647;
 const atlas = document.createElement('canvas'); atlas.width = 16*NTILES; atlas.height = 16;
 const actx = atlas.getContext('2d');
 const col = (r,g,b,v) => { const k = 1 + (rnd()-.5)*v; return `rgb(${r*k|0},${g*k|0},${b*k|0})`; };
 function paint(t, fn){ for (let y=0; y<16; y++) for (let x=0; x<16; x++) { const c = fn(x,y); if (c) { actx.fillStyle = c; actx.fillRect(t*16+x, y, 1, 1); } } }
-paint(0, () => col(95,168,58,.35));                                                   // grass top
-paint(1, (x,y) => (y<3 || (y<5 && rnd()<.5)) ? col(95,168,58,.35) : col(134,96,60,.35)); // grass side
-paint(2, () => rnd()<.1 ? col(90,62,38,.3) : col(134,96,60,.3));                      // dirt
-paint(3, () => rnd()<.08 ? col(95,95,95,.2) : col(127,127,127,.22));                  // stone
-paint(4, (x,y) => (y%5===4 || (x+(y/5|0)*3)%6===5) ? col(68,68,68,.2) : col(120,120,120,.3)); // cobblestone
-paint(5, () => col(225,210,150,.12));                                                 // sand
-paint(6, (x) => x%4===0 ? col(70,50,28,.25) : col(105,78,42,.3));                     // log side
-paint(7, (x,y) => { const d = Math.hypot(x-7.5,y-7.5); return d>7 ? col(100,75,40,.2) : (d|0)%2 ? col(175,140,85,.1) : col(150,115,65,.1); }); // log top
-paint(8, (x,y) => (y%4===3 || (x+(y/4|0)*5)%8===7) ? col(105,80,45,.15) : col(170,135,80,.14)); // planks
-paint(9, () => rnd()<.2 ? null : col(50,135,40,.5));                                  // leaves (holes!)
-paint(10, (x,y) => (x===0||y===0||x===15||y===15) ? 'rgb(205,230,240)' : (x===y && x>2 && x<7) ? 'rgb(235,248,255)' : null); // glass
-paint(11, (x,y) => (y%4===3 || (x+(y/4|0)%2*4)%8===7) ? col(190,182,172,.1) : col(150,70,55,.2)); // brick
+paint(0, () => rnd() < .12 ? col(150,150,60,.3) : col(196,176,84,.3));      // golden dry grass
+paint(1, (x,y) => (y<3 || (y<5 && rnd()<.5)) ? col(196,176,84,.3) : col(156,104,64,.3));
+paint(2, () => rnd()<.1 ? col(110,70,42,.3) : col(156,104,64,.3));      // red-brown savanna soil
+paint(3, () => rnd()<.08 ? col(95,95,95,.2) : col(127,127,127,.22));
+paint(4, (x,y) => (y%5===4 || (x+(y/5|0)*3)%6===5) ? col(68,68,68,.2) : col(120,120,120,.3));
+paint(5, () => col(225,210,150,.12));
+paint(6, (x) => x%4===0 ? col(70,50,28,.25) : col(105,78,42,.3));
+paint(7, (x,y) => { const d = Math.hypot(x-7.5,y-7.5); return d>7 ? col(100,75,40,.2) : (d|0)%2 ? col(175,140,85,.1) : col(150,115,65,.1); });
+paint(8, (x,y) => (y%4===3 || (x+(y/4|0)*5)%8===7) ? col(105,80,45,.15) : col(170,135,80,.14));
+paint(9, () => rnd()<.2 ? null : col(105,140,50,.5));                  // olive acacia leaves
+paint(10, (x,y) => (x===0||y===0||x===15||y===15) ? 'rgb(205,230,240)' : (x===y && x>2 && x<7) ? 'rgb(235,248,255)' : null);
+paint(11, (x,y) => (y%4===3 || (x+(y/4|0)%2*4)%8===7) ? col(190,182,172,.1) : col(150,70,55,.2));
+paint(12, (x,y) => x%3===1 ? col(120,150,40,.3) : (y+x)%5===0 ? col(235,205,90,.2) : col(215,180,70,.3)); // wheat
+paint(13, (x,y) => y<5 ? col(245,245,245,.08) : (y===5 ? col(150,30,35,.1) : col(190,40,45,.2)));   // bed top: pillow + red blanket
+paint(14, (x,y) => y<9 ? col(190,40,45,.2) : col(170,135,80,.15));                                  // bed side
+paint(15, (x,y) => y<2 ? col(250,250,252,.03) : y>13 ? col(190,195,200,.05) : col(235,238,240,.04)); // bathtub side
+paint(16, (x,y) => (x<3||y<3||x>12||y>12) ? col(250,250,252,.03) : (x+y)%7===0 ? col(130,200,245,.1) : col(70,150,220,.15)); // bathtub top: water!
 const tex = new THREE.CanvasTexture(atlas);
 tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false;
 
@@ -79,25 +94,256 @@ function noise(x,z){
   const a=hash(xi,zi), b=hash(xi+1,zi), c=hash(xi,zi+1), d=hash(xi+1,zi+1), u=s(xf), v=s(zf);
   return a + (b-a)*u + (c-a)*v + (a-b-c+d)*u*v;
 }
-const heightAt = (x,z) => Math.floor(6 + noise(x/16,z/16)*10 + noise(x/6,z/6)*3);
+const heightAt = (x,z) => Math.floor(9 + noise(x/30,z/30)*6 + noise(x/10,z/10)*1.5);      // gentle rolling plains
 for (let x=0; x<W; x++) for (let z=0; z<W; z++) {
   const h = heightAt(x,z);
-  for (let y=0; y<=h; y++) put(x,y,z, y===h ? (h<9 ? 5 : 1) : y>h-3 ? 2 : 3);
+  for (let y=0; y<=h; y++) put(x,y,z, y===h ? (noise(x/18+50,z/18+20) > .8 ? 5 : 1) : y>h-3 ? 2 : 3);
 }
-for (let x=3; x<W-3; x++) for (let z=3; z<W-3; z++) {
+// flat-topped acacia trees, sprinkled across the plains
+for (let x=4; x<W-4; x++) for (let z=4; z<W-4; z++) {
   const h = heightAt(x,z);
-  if (get(x,h,z)!==1 || hash(x*3.7,z*5.1) < 0.985) continue;
-  const th = 4 + (hash(x,z)*2|0);
+  if (get(x,h,z)!==1 || hash(x*3.7,z*5.1) < 0.988) continue;
+  const th = 4 + (hash(x,z)*3|0);
   for (let y=1; y<=th; y++) put(x,h+y,z,6);
+  for (let dx=-3; dx<=3; dx++) for (let dz=-3; dz<=3; dz++) {
+    if (Math.abs(dx)+Math.abs(dz) <= 4) put(x+dx,h+th+1,z+dz,8);
+    if (Math.abs(dx)+Math.abs(dz) <= 2) put(x+dx,h+th+2,z+dz,8);
+  }
+}
+// little rocky hills (kopjes)
+for (let k=0; k<W/8; k++) {
+  const cx = 6 + Math.floor(hash(k,1.7)*(W-12)), cz = 6 + Math.floor(hash(k,9.3)*(W-12)), r = 2 + (hash(k,4.1)*2|0);
+  for (let dx=-r; dx<=r; dx++) for (let dz=-r; dz<=r; dz++) {
+    const d = Math.hypot(dx,dz); if (d > r) continue;
+    const base = heightAt(cx+dx,cz+dz), hh = Math.round((r-d)*1.1) + 1;
+    for (let y=1; y<=hh; y++) put(cx+dx,base+y,cz+dz, hash(dx*3+y,dz*5+k) < .3 ? 4 : 3);
+  }
+}
+
+// ---------- THE VILLAGE ----------
+// 1) find the flattest spot
+let best = null;
+for (let sx=24; sx<=W-24; sx+=6) for (let sz=24; sz<=W-24; sz+=6) {
+  let mn=99, mx=0, sum=0, n=0;
+  for (let dx=-16; dx<=16; dx+=4) for (let dz=-16; dz<=16; dz+=4) { const h = heightAt(sx+dx,sz+dz); mn=Math.min(mn,h); mx=Math.max(mx,h); sum+=h; n++; }
+  if (!best || mx-mn < best.score) best = {sx, sz, score:mx-mn, h:Math.round(sum/n)};
+}
+const VC = {x:best.sx, z:best.sz}, VH = Math.max(10, Math.min(16, best.h));
+// 2) flatten the ground
+for (let x=VC.x-16; x<=VC.x+16; x++) for (let z=VC.z-16; z<=VC.z+16; z++)
+  for (let y=0; y<H; y++) put(x,y,z, y<=VH-3 ? 3 : y<VH ? 2 : y===VH ? 1 : 0);
+// 3) sand paths
+for (let i=-14; i<=14; i++) { put(VC.x+i,VH,VC.z,5); put(VC.x,VH,VC.z+i,5); }
+// 4) houses (6x6, walls of planks, log corners, glass windows, brick roof)
+const houseTeddies = [];
+function house(x0, z0, doorSouth) {
+  const w = 6, d = 6;
+  for (let x=0; x<w; x++) for (let z=0; z<d; z++) {
+    const X = x0+x, Z = z0+z, edge = x===0||z===0||x===w-1||z===d-1, corner = (x===0||x===w-1)&&(z===0||z===d-1);
+    put(X,VH,Z,7);
+    for (let y=1; y<=3; y++) {
+      let b = 0;
+      if (edge) b = corner ? 6 : 7;
+      if (edge && !corner && y===2 && ((x%2===0 && (z===0||z===d-1)) || (z%2===0 && (x===0||x===w-1)))) b = 9;
+      put(X,VH+y,Z,b);
+    }
+    put(X,VH+4,Z,10);
+    if (!edge) put(X,VH+5,Z,10);
+  }
+  const dx = x0+3, dz = doorSouth ? z0+d-1 : z0;                  // doorway
+  put(dx,VH+1,dz,0); put(dx,VH+2,dz,0); put(dx,VH+3,dz,7);
+  const zb = doorSouth ? z0+1 : z0+d-2, zb2 = doorSouth ? z0+2 : z0+d-3;
+  put(x0+1, VH+1, zb, 7);                                          // a table
+  put(x0+2, VH+1, zb, 12); put(x0+3, VH+1, zb, 12);                // a bed
+  put(x0+4, VH+1, zb, 13); put(x0+4, VH+1, zb2, 13);               // a bathtub
+  houseTeddies.push([x0+3.5, VH+2, zb+.5, doorSouth ? Math.PI : 0]);   // a teddy on the bed                  // a table
+  const dir = doorSouth ? 1 : -1;                                 // path from door to main road
+  for (let z=dz+dir; z!==VC.z; z+=dir) put(dx,VH,z,5);
+}
+house(VC.x-9, VC.z-9, true);  house(VC.x+4, VC.z-9, true);
+house(VC.x-9, VC.z+4, false); house(VC.x+4, VC.z+4, false);
+// 5) the well in the middle
+for (let dx=-1; dx<=1; dx++) for (let dz=-1; dz<=1; dz++) {
+  put(VC.x+dx,VH,VC.z+dz,4);
+  if (dx||dz) put(VC.x+dx,VH+1,VC.z+dz,4);
+  put(VC.x+dx,VH+4,VC.z+dz,7);
+}
+for (const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) { put(VC.x+dx,VH+2,VC.z+dz,6); put(VC.x+dx,VH+3,VC.z+dz,6); }
+// 6) the wheat farm
+for (let x=VC.x+11; x<=VC.x+14; x++) for (let z=VC.z-3; z<=VC.z+2; z++) { put(x,VH,z,2); put(x,VH+1,z,11); }
+
+// ---------- THE ZOO (land) ----------
+let zbest = null;
+for (let sx=30; sx<=W-30; sx+=6) for (let sz=30; sz<=W-30; sz+=6) {
+  if (Math.abs(sx-VC.x) < 50 && Math.abs(sz-VC.z) < 50) continue;       // keep it away from the village
+  let mn=99, mx=0, sum=0, n=0;
+  for (let dx=-22; dx<=22; dx+=4) for (let dz=-22; dz<=22; dz+=4) { const h = heightAt(sx+dx,sz+dz); mn=Math.min(mn,h); mx=Math.max(mx,h); sum+=h; n++; }
+  if (!zbest || mx-mn < zbest.score) zbest = {sx, sz, score:mx-mn, h:Math.round(sum/n)};
+}
+if (!zbest) zbest = {sx:W-30, sz:W-30, h:12};
+const zoo = {x:zbest.sx, z:zbest.sz, h:Math.max(10, Math.min(16, zbest.h)), pens:[]};
+for (let x=zoo.x-22; x<=zoo.x+22; x++) for (let z=zoo.z-22; z<=zoo.z+22; z++)
+  for (let y=0; y<H; y++) put(x,y,z, y<=zoo.h-3 ? 3 : y<zoo.h ? 2 : y===zoo.h ? 1 : 0);
+for (let x=zoo.x-22; x<=zoo.x+22; x++) for (let dz=-1; dz<=1; dz++) put(x,zoo.h,zoo.z+dz,5);   // main sand path
+function miniTree(x, z, th){
+  for (let y=1; y<=th; y++) put(x,zoo.h+y,z,6);
   for (let dx=-2; dx<=2; dx++) for (let dz=-2; dz<=2; dz++) for (let dy=th-1; dy<=th+1; dy++)
-    if (!get(x+dx,h+dy,z+dz) && Math.abs(dx)+Math.abs(dz)+Math.max(0,dy-th)*2 < 4) put(x+dx,h+dy,z+dz,8);
+    if (!get(x+dx,zoo.h+dy,z+dz) && Math.abs(dx)+Math.abs(dz)+Math.max(0,dy-th)*2 < 4) put(x+dx,zoo.h+dy,z+dz,8);
+}
+// a pen: cobblestone base, glass walls so you can see in, and a gate facing the path
+function pen(x0, z0, kind, floor, gateSouth, decor){
+  const gz = gateSouth ? z0+8 : z0;
+  for (let x=0; x<10; x++) for (let z=0; z<9; z++) {
+    const X = x0+x, Z = z0+z, edge = x===0||z===0||x===9||z===8, corner = (x===0||x===9)&&(z===0||z===8);
+    put(X,zoo.h,Z, edge ? 4 : floor);
+    if (edge) for (let y=1; y<=3; y++) put(X,zoo.h+y,Z, (y===1 || corner) ? 4 : 9);
+  }
+  for (const dx of [4,5]) { put(x0+dx,zoo.h,gz,5); for (let y=1; y<=3; y++) put(x0+dx,zoo.h+y,gz,0); }   // open gate
+  const dir = gateSouth ? 1 : -1;
+  for (let z=gz+dir; z!==zoo.z; z+=dir) { put(x0+4,zoo.h,z,5); put(x0+5,zoo.h,z,5); }                      // path to the gate
+  decor(x0, z0);
+  zoo.pens.push({x0, z0, kind, gz});
+}
+const rock = (x,z) => { put(x,zoo.h+1,z,4); put(x+1,zoo.h+1,z,4); put(x,zoo.h+1,z+1,4); put(x,zoo.h+2,z,4); };
+pen(zoo.x-17, zoo.z-14, 'lion',     5, true,  (x,z) => rock(x+2,z+2));
+pen(zoo.x-5,  zoo.z-14, 'elephant', 2, true,  (x,z) => {});
+pen(zoo.x+7,  zoo.z-14, 'giraffe',  1, true,  (x,z) => miniTree(x+7,z+2,7));
+pen(zoo.x-17, zoo.z+6,  'zebra',    1, false, (x,z) => miniTree(x+7,z+6,4));
+pen(zoo.x-5,  zoo.z+6,  'panda',    1, false, (x,z) => miniTree(x+2,z+6,4));
+pen(zoo.x+7,  zoo.z+6,  'penguin',  3, false, (x,z) => rock(x+6,z+5));
+// entrance arch
+for (const dz of [-3,3]) for (let y=1; y<=5; y++) put(zoo.x-22,zoo.h+y,zoo.z+dz,6);
+for (let dz=-3; dz<=3; dz++) put(zoo.x-22,zoo.h+5,zoo.z+dz,7);
+
+// ---------- PRIDE ROCK (land) ----------
+let rbest = null;
+for (const gap of [55, 45, 36]) {
+  for (let sx=34; sx<=W-34; sx+=6) for (let sz=34; sz<=W-34; sz+=6) {
+    if (Math.abs(sx-VC.x) < gap && Math.abs(sz-VC.z) < gap) continue;
+    if (Math.abs(sx-zoo.x) < gap && Math.abs(sz-zoo.z) < gap) continue;
+    let mn=99, mx=0, sum=0, n=0;
+    for (let dx=-24; dx<=24; dx+=4) for (let dz=-24; dz<=24; dz+=4) { const h = heightAt(sx+dx,sz+dz); mn=Math.min(mn,h); mx=Math.max(mx,h); sum+=h; n++; }
+    if (!rbest || mx-mn < rbest.score) rbest = {sx, sz, score:mx-mn, h:Math.round(sum/n)};
+  }
+  if (rbest) break;
+}
+if (!rbest) rbest = {sx: VC.x < W/2 ? W-34 : 34, sz: VC.z < W/2 ? W-34 : 34, h:12};
+const PC = {x:rbest.sx, z:rbest.sz}, PH = Math.max(10, Math.min(16, rbest.h));
+for (let x=PC.x-24; x<=PC.x+24; x++) for (let z=PC.z-24; z<=PC.z+24; z++)
+  for (let y=0; y<H; y++) put(x,y,z, y<=PH-3 ? 3 : y<PH ? 2 : y===PH ? 1 : 0);
+const rockBlock = (dx,y,dz) => hash(dx*3.1+y, dz*7.7) < .25 ? 4 : 3;
+// the big rock: tallest near the front, sloping down to the back and sides
+for (let dx=-8; dx<=8; dx++) for (let dz=-7; dz<=4; dz++) {
+  const h = Math.round(10 - Math.abs(dx)*.55 + dz*.25 + (hash(PC.x+dx,PC.z+dz)-.5)*1.6);
+  for (let y=1; y<=h; y++) put(PC.x+dx,PH+y,PC.z+dz, rockBlock(dx,y,dz));
+}
+// the ledge: solid at the base, then a slab that sticks out over a shady cave
+for (let dx=-3; dx<=3; dx++) {
+  for (let dz=5; dz<=7; dz++) for (let y=1; y<=9; y++) put(PC.x+dx,PH+y,PC.z+dz, rockBlock(dx,y,dz));
+  for (let dz=8; dz<=12; dz++) for (let y=8; y<=9; y++) put(PC.x+dx,PH+y,PC.z+dz, rockBlock(dx,y,dz));
+}
+for (const dx of [-3,3]) for (let y=1; y<=7; y++) put(PC.x+dx,PH+y,PC.z+12, rockBlock(dx,y,12));   // front pillars
+// stairs up to the ledge (jump up each step!)
+for (let i=0; i<=8; i++) for (let dz=6; dz<=8; dz++) for (let y=1; y<=i+1; y++) put(PC.x+11-i,PH+y,PC.z+dz, rockBlock(11-i,y,dz));
+// flat-topped savanna trees
+function acacia(x, z){
+  for (let y=1; y<=4; y++) put(x,PH+y,z,6);
+  for (let dx=-3; dx<=3; dx++) for (let dz=-3; dz<=3; dz++) {
+    if (Math.abs(dx)+Math.abs(dz) <= 4) put(x+dx,PH+5,z+dz,8);
+    if (Math.abs(dx)+Math.abs(dz) <= 2) put(x+dx,PH+6,z+dz,8);
+  }
+}
+for (const [dx,dz] of [[-18,8],[17,12],[-20,-8],[19,-10],[-12,18],[10,19]]) acacia(PC.x+dx, PC.z+dz);
+
+// ---------- OUR MANSION (land + building) ----------
+let mbest = null;
+for (const gap of [56, 48, 44, 36]) {
+  for (let sx=30; sx<=W-30; sx+=6) for (let sz=34; sz<=W-30; sz+=6) {
+    if (Math.abs(sx-VC.x) < gap && Math.abs(sz-VC.z) < gap) continue;
+    if (Math.abs(sx-zoo.x) < gap && Math.abs(sz-zoo.z) < gap) continue;
+    if (Math.abs(sx-PC.x) < gap && Math.abs(sz-PC.z) < gap) continue;
+    let mn=99, mx=0, sum=0, n=0;
+    for (let dx=-20; dx<=20; dx+=4) for (let dz=-16; dz<=20; dz+=4) { const h = heightAt(sx+dx,sz+dz); mn=Math.min(mn,h); mx=Math.max(mx,h); sum+=h; n++; }
+    if (!mbest || mx-mn < mbest.score) mbest = {sx, sz, score:mx-mn, h:Math.round(sum/n)};
+  }
+  if (mbest) break;
+}
+if (!mbest) mbest = {sx:W/2, sz:W/2, h:12};
+const MC = {x:mbest.sx, z:mbest.sz}, MH = Math.max(10, Math.min(14, mbest.h));
+const ox = MC.x-12, oz = MC.z-14;                       // the mansion is 25 wide and 17 deep, front faces +z
+const Mb = (x,y,z,v) => put(ox+x, MH+y, oz+z, v);
+const Mfill = (x0,x1,y0,y1,z0,z1,v) => { for (let x=x0; x<=x1; x++) for (let y=y0; y<=y1; y++) for (let z=z0; z<=z1; z++) Mb(x,y,z,v); };
+// flat ground for the house and garden
+for (let x=ox-8; x<=ox+32; x++) for (let z=oz-4; z<=oz+36; z++)
+  for (let y=0; y<H; y++) put(x,y,z, y<=MH-3 ? 3 : y<MH ? 2 : y===MH ? 1 : 0);
+Mfill(0,24,0,0,0,16,7);                                 // wooden floor
+// outer walls: ground floor (y1-4) and upstairs (y6-8) with log pillars and glass windows
+for (let x=0; x<=24; x++) for (let z=0; z<=16; z++) {
+  if (!(x===0||x===24||z===0||z===16)) continue;
+  const corner = (x===0||x===24)&&(z===0||z===16), pillar = ((z===0||z===16) && x%6===0) || ((x===0||x===24) && z%8===0);
+  const win = ((z===0||z===16) && x%3===1) || ((x===0||x===24) && z%4===2);
+  for (let y=1; y<=4; y++) Mb(x,y,z, (corner||pillar) ? 6 : y===1 ? 4 : (y<=3 && win) ? 9 : 7);
+  for (let y=6; y<=8; y++) Mb(x,y,z, (corner||pillar) ? 6 : (y>=7 && win) ? 9 : 7);
+  Mb(x,5,z,10); Mb(x,9,z,10);                           // brick trim between floors and under the roof
+}
+Mfill(1,23,5,5,1,15,7); Mfill(1,23,9,9,1,15,7);         // upstairs floor + ceiling
+Mfill(9,13,5,5,1,3,0);                                  // hole for the grand staircase
+// walls between the ground-floor rooms (with doorways)
+for (let y=1; y<=4; y++) {
+  for (let z=1; z<=15; z++) { Mb(8,y,z,7); Mb(16,y,z,7); }
+  for (let x=1; x<=7; x++) Mb(x,y,8,7);
+  for (let x=17; x<=23; x++) Mb(x,y,8,7);
+}
+for (let y=1; y<=3; y++) {
+  for (const z of [4,5,11,12]) { Mb(8,y,z,0); Mb(16,y,z,0); }
+  for (const x of [3,4,19,20]) Mb(x,y,8,0);
+  for (let x=11; x<=13; x++) Mb(x,y,16,0);              // the big front door
+}
+for (let i=0; i<=4; i++) for (let z=1; z<=3; z++) for (let y=1; y<=i+1; y++) Mb(9+i,y,z,4);   // grand staircase (jump up the steps!)
+// upstairs: a wall splitting the bedroom from the sky lounge, balcony doors, stair railings
+for (let y=6; y<=8; y++) { for (let z=4; z<=15; z++) Mb(14,y,z,7); for (const z of [7,8]) Mb(14,y,z,0); for (let x=11; x<=13; x++) Mb(x,y,16,0); }
+Mfill(9,13,6,6,4,4,7); Mfill(8,8,6,6,1,3,7);
+// hip roof made of brick
+for (let k=0; k<=4; k++) Mfill(-1+k, 25-k, 10+k, 10+k, -1+2*k, 17-2*k, 10);
+// front porch + balcony
+Mfill(8,16,0,0,17,19,4); Mfill(6,18,5,5,17,19,7);
+for (const x of [6,9,15,18]) Mfill(x,x,1,4,19,19,4);
+for (let x=6; x<=18; x++) Mb(x,6,19,9);
+for (let z=17; z<=19; z++) { Mb(6,6,z,9); Mb(18,6,z,9); }
+// ----- ground floor furniture -----
+Mfill(11,13,0,0,2,15,10);                                           // red carpet down the great hall
+Mb(9,1,14,7); Mb(15,1,14,7); houseTeddies.push([ox+9.5, MH+2, oz+14.5, Math.PI]);   // benches (with a teddy!)
+Mfill(2,6,0,0,11,14,11);                                            // Aryan's hay bed
+Mb(1,1,14,4); Mb(1,1,13,4); Mb(2,1,14,4); Mb(1,2,14,4); Mb(6,1,10,13);   // his rocks + water bowl
+Mfill(1,7,1,1,1,1,4); Mfill(3,4,1,1,3,4,7); Mfill(1,1,1,2,3,5,11);  // kitchen: counter, table, pantry
+for (let z=10; z<=14; z++) for (let y=1; y<=3; y++) Mb(23,y,z,(y+z)%2 ? 7 : 10);   // library bookshelves
+Mb(19,1,13,12); Mb(20,1,13,12); Mb(20,1,11,7);                      // sofa + table
+for (const x of [18,19,21,22]) Mb(x,1,1,13);                        // two bathtubs
+// ----- upstairs furniture -----
+for (const x of [2,3,5,6]) Mb(x,6,2,12);                            // beds
+houseTeddies.push([ox+3.5, MH+7, oz+2.5, Math.PI], [ox+6.5, MH+7, oz+2.5, Math.PI]);
+Mb(2,6,6,13); Mb(2,6,7,13); Mb(2,6,12,7); Mb(3,6,12,7);             // tub + dresser
+for (const x of [16,17,20,21]) Mb(x,6,3,12);                        // sky lounge couches
+houseTeddies.push([ox+21.5, MH+7, oz+3.5, Math.PI]);
+Mfill(20,23,5,5,11,14,11); Mb(23,6,10,13);                          // more hay + bowl for Aryan
+// ----- garden -----
+Mfill(11,13,0,0,20,34,5);                                           // sand path
+Mfill(10,14,1,1,24,28,13); Mfill(12,12,1,3,26,26,4);                // fountain pool (blue tub tops!)
+for (let x=-8; x<=32; x++) for (let z=-4; z<=34; z++) {             // hedge all around, gate at the front
+  if (!(x===-8||x===32||z===-4||z===34) || (z===34 && x>=11 && x<=13)) continue;
+  Mb(x,1,z,8); Mb(x,2,z,8);
+}
+for (const x of [10,14]) Mfill(x,x,1,3,34,34,4);                    // gate posts
+for (const [tx,tz] of [[-4,2],[28,2],[-4,28],[28,28]]) {            // acacia trees
+  for (let y=1; y<=4; y++) Mb(tx,y,tz,6);
+  for (let dx=-3; dx<=3; dx++) for (let dz=-3; dz<=3; dz++) { if (Math.abs(dx)+Math.abs(dz)<=4) Mb(tx+dx,5,tz+dz,8); if (Math.abs(dx)+Math.abs(dz)<=2) Mb(tx+dx,6,tz+dz,8); }
 }
 
 // ---------- SCENE & SKY ----------
 const DAY_SKY = new THREE.Color(0x87ceeb), NIGHT_SKY = new THREE.Color(0x0b1030);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(DAY_SKY);
-scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
+scene.fog = new THREE.Fog(0x87ceeb, 40, 110);
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 250);
 camera.rotation.order = 'YXZ';
 const renderer = new THREE.WebGLRenderer({antialias:false});
@@ -127,7 +373,7 @@ function buildChunk(cx, cz) {
     const b = get(x,y,z); if (!b) continue;
     for (const f of FACES) {
       const n = get(x+f.d[0], y+f.d[1], z+f.d[2]);
-      if (n && !(SEE_THROUGH[n] && n !== b)) continue;      // hidden face, skip!
+      if (n && !(SEE_THROUGH[n] && n !== b)) continue;
       const tile = BLOCKS[b][f.d[1]===1 ? 1 : f.d[1]===-1 ? 3 : 2];
       const start = pos.length/3;
       f.c.forEach((c,i) => {
@@ -169,6 +415,11 @@ function drawMap(){
   mctx.drawImage(off, 0, 0, mc.width, mc.height);
   mctx.fillStyle = '#fff';
   for (const a of animals) mctx.fillRect(a.g.position.x*S-2, a.g.position.z*S-2, 4, 4);
+  mctx.fillStyle = '#fd0';
+  for (const v of villagers) mctx.fillRect(v.g.position.x*S-2, v.g.position.z*S-2, 4, 4);
+  for (const p of pets) { mctx.fillStyle = p.tamed ? '#0ff' : '#f80'; mctx.fillRect(p.g.position.x*S-2, p.g.position.z*S-2, 4, 4); }
+  mctx.fillStyle = '#fa0'; for (const c of prideCast) mctx.fillRect(c.g.position.x*S-2, c.g.position.z*S-2, 4, 4);
+  mctx.fillStyle = '#c6f'; for (const z of zooAnimals.concat(herds)) mctx.fillRect(z.g.position.x*S-2, z.g.position.z*S-2, 4, 4);
   const px = player.x*S, pz = player.z*S, dx = -Math.sin(player.yaw), dz = -Math.cos(player.yaw);
   mctx.fillStyle = '#e22'; mctx.beginPath();
   mctx.moveTo(px+dx*9, pz+dz*9); mctx.lineTo(px-dx*5-dz*5, pz-dz*5+dx*5); mctx.lineTo(px-dx*5+dz*5, pz-dz*5-dx*5); mctx.fill();
@@ -183,44 +434,706 @@ function setBlock(x,y,z,v) {
   if (z%CS===CS-1 && cz<W/CS-1) buildChunk(cx,cz+1);
 }
 
-// ---------- ANIMALS ----------
-const TYPES = { pig:{body:0xf0a0a8, head:0xf0a0a8, s:[.55,.45,.85]}, cow:{body:0x5a3a22, head:0xf0f0f0, s:[.65,.6,1.05]}, sheep:{body:0xf2f2f2, head:0x333333, s:[.6,.5,.75]} };
-const animals = [];
+// ---------- CREATURES ----------
+const mk = (g) => (bw,bh,bd,c,px,py,pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd), new THREE.MeshBasicMaterial({color:c})); m.position.set(px,py,pz); g.add(m); };
+const TYPES = { pig:{body:0xf0a0a8, head:0xf0a0a8, s:[.55,.45,.85]}, cow:{body:0x5a3a22, head:0xf0f0f0, s:[.65,.6,1.05]}, sheep:{body:0xf2f2f2, head:0xe8d5c0, s:[.6,.5,.75]} };
+const animals = [], villagers = [], pets = [];
+function cuteFace(box, hy, fz){
+  for (const s of [-1,1]) {
+    box(.1,.13,.03,0x111111,s*.13,hy+.03,fz-.01);       // big eyes
+    box(.035,.045,.03,0xffffff,s*.11,hy+.07,fz-.025);   // sparkles
+    box(.1,.06,.03,0xff9aa8,s*.19,hy-.07,fz-.01);       // rosy cheeks
+  }
+}
+function animalExtras(type, box, w, h, d, hy, hz){
+  const fz = hz-.24;
+  if (type === 'pig') {
+    box(.22,.15,.1,0xe07a86,0,hy-.08,fz-.04); box(.03,.05,.03,0x8a3a44,-.05,hy-.08,fz-.1); box(.03,.05,.03,0x8a3a44,.05,hy-.08,fz-.1);
+    box(.15,.15,.05,0xe58a95,-.2,hy+.28,hz); box(.15,.15,.05,0xe58a95,.2,hy+.28,hz);
+    box(.06,.06,.12,0xe07a86,0,.35+h*.85,d/2+.06);
+  }
+  if (type === 'cow') {
+    box(.3,.18,.1,0xeab5a5,0,hy-.1,fz-.04);
+    box(.07,.14,.07,0xf0e6c8,-.2,hy+.3,hz); box(.07,.14,.07,0xf0e6c8,.2,hy+.3,hz);
+    box(w+.03,.26,.32,0xf0f0f0,0,.35+h*.65,.12); box(.06,.32,.06,0x3a2412,0,.35+h*.6,d/2+.05);
+  }
+  if (type === 'sheep') {
+    box(w+.16,h+.14,d+.14,0xfafafa,0,.35+h/2,0); box(.54,.16,.5,0xfafafa,0,hy+.28,hz+.04);
+    box(.16,.08,.12,0xc8b49a,-.31,hy+.02,hz); box(.16,.08,.12,0xc8b49a,.31,hy+.02,hz);
+  }
+}
 function makeAnimal(type, x, z){
-  const t = TYPES[type], g = new THREE.Group(), [w,h,d] = t.s;
-  const box = (bw,bh,bd,c,px,py,pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd), new THREE.MeshBasicMaterial({color:c})); m.position.set(px,py,pz); g.add(m); };
+  const t = TYPES[type], g = new THREE.Group(), [w,h,d] = t.s, box = mk(g);
   box(w,h,d,t.body,0,.35+h/2,0);
-  box(.38,.38,.38,t.head,0,.35+h+.02,-d/2-.12);
+  const hy = .35+h+.02, hz = -d/2-.14;
+  box(.5,.46,.46,t.head,0,hy,hz);                       // bigger, cuter head
+  cuteFace(box, hy, hz-.23);
+  animalExtras(type, box, w, h, d, hy, hz);
   for (const lx of [-1,1]) for (const lz of [-1,1]) box(.14,.35,.14,0x444444,lx*w/2.5,.175,lz*d/2.5);
   g.position.set(x, topY(x,z)+1, z); scene.add(g);
-  animals.push({g, dir:Math.random()*6.28, timer:0, moving:false});
+  animals.push({g, dir:Math.random()*6.28, timer:0, moving:false, hp:3, hurt:0});
 }
-for (let tries=0; animals.length < 16 && tries < 800; tries++) {
+function trySpawnAnimal(){
+  for (let i=0; i<30; i++) {
+    const x = Math.random()*(W-4)+2, z = Math.random()*(W-4)+2;
+    if (topY(x,z) >= 9 && grassAt(x,z) && Math.hypot(x-player.x, z-player.z) > 8) { makeAnimal(['pig','cow','sheep'][Math.random()*3|0], x, z); return; }
+  }
+}
+function makeVillager(x,z){
+  const g = new THREE.Group(), box = mk(g), robe = [0x7a4b2a,0x3f6e3a,0x6a3f8c,0x8c3f3f,0x3f5f8c,0xddddcc][villagers.length%6];
+  box(.5,.7,.3,robe,0,.75,0);
+  box(.2,.4,.2,0x333333,-.13,.2,0); box(.2,.4,.2,0x333333,.13,.2,0);
+  const hat = [0x5a3a1a,0x2d2d2d,0xc89a3a,0x8a2a2a,0x3a5a2a,0x6a4a8a][villagers.length%6];
+  box(.5,.48,.48,0xe8b98a,0,1.34,0);                         // big cute head
+  box(.54,.12,.52,hat,0,1.62,.01);                           // little hat
+  box(.1,.12,.03,0x1b1b1b,-.12,1.36,-.245); box(.1,.12,.03,0x1b1b1b,.12,1.36,-.245);   // eyes
+  box(.03,.04,.03,0xffffff,-.1,1.4,-.26); box(.03,.04,.03,0xffffff,.14,1.4,-.26);      // sparkles
+  box(.09,.06,.03,0xff9aa8,-.19,1.26,-.245); box(.09,.06,.03,0xff9aa8,.19,1.26,-.245); // blush
+  box(.14,.03,.03,0x7a3b2e,0,1.22,-.245);                    // smile
+  box(.14,.5,.14,robe,-.34,.8,0); box(.14,.5,.14,robe,.34,.8,0);                       // arms
+  box(.14,.12,.14,0xe8b98a,-.34,.5,0); box(.14,.12,.14,0xe8b98a,.34,.5,0);             // hands
+  box(.09,.14,.09,0xd8a070,0,1.31,-.27);              // little nose
+  g.position.set(x, VH+1, z); scene.add(g);
+  villagers.push({g, dir:Math.random()*6.28, timer:0, moving:false, give:0, vil:true});
+}
+const walkable = (x,z) => { const X=Math.floor(x), Z=Math.floor(z); return Math.abs(x-VC.x)<15 && Math.abs(z-VC.z)<15 && get(X,VH,Z) && !get(X,VH+1,Z) && !get(X,VH+2,Z); };
+for (let tries=0; villagers.length < 7 && tries < 400; tries++) {
+  const x = VC.x + (Math.random()-.5)*28, z = VC.z + (Math.random()-.5)*28;
+  if (walkable(x,z)) makeVillager(x,z);
+}
+for (let tries=0; animals.length < 40 && tries < 3000; tries++) {
   const x = Math.random()*(W-4)+2, z = Math.random()*(W-4)+2;
   if (topY(x,z) >= 9 && grassAt(x,z)) makeAnimal(['pig','cow','sheep'][animals.length%3], x, z);
 }
-function updateAnimals(dt){
-  for (const a of animals) {
-    a.timer -= dt;
-    if (a.timer < 0) { a.timer = 1 + Math.random()*3; a.moving = Math.random() > 0.35; a.dir += (Math.random()-.5)*2.5; }
-    const p = a.g.position;
-    if (a.moving) {
-      const nx = p.x - Math.sin(a.dir)*1.2*dt, nz = p.z - Math.cos(a.dir)*1.2*dt;
-      const ok = nx>1 && nx<W-1 && nz>1 && nz<W-1 && grassAt(nx,nz) && Math.abs(topY(nx,nz)+1 - p.y) <= 1;
-      if (ok) { p.x = nx; p.z = nz; } else a.dir += 1.6 + Math.random();
+// ---------- PETS: DOGS AND CATS ----------
+// stand(): the height a pet would stand at here (looks down from just above its feet)
+function stand(x, z, fromY){
+  const X = Math.floor(x), Z = Math.floor(z);
+  for (let y = Math.min(H-1, Math.floor(fromY)+1); y >= 0; y--) if (get(X,y,Z)) return y+1;
+  return -1;
+}
+const petOk = (nx, nz, p) => { const ny = stand(nx,nz,p.y); return nx>1 && nx<W-1 && nz>1 && nz<W-1 && ny>=0 && ny-p.y<=1.01 && p.y-ny<=2; };
+function makePet(type, x, z, y){
+  const g = new THREE.Group();
+  const m = (w,h,d,c,px,py,pz) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c})); me.position.set(px,py,pz); g.add(me); return me; };
+  let collar, tail;
+  if (type === 'dog') {
+    const c = 0xc8923a;
+    m(.4,.4,.75,c,0,.5,0);                                   // body
+    m(.34,.34,.34,c,0,.8,-.5);                               // head
+    m(.16,.14,.14,0xe9d3a0,0,.74,-.72); m(.07,.09,.03,0x111111,-.09,.85,-.68); m(.07,.09,.03,0x111111,.09,.85,-.68); m(.08,.07,.04,0x111111,0,.77,-.8);                      // snout
+    m(.1,.16,.08,0x6b4a1e,-.12,1.02,-.5); m(.1,.16,.08,0x6b4a1e,.12,1.02,-.5); // ears
+    tail = m(.1,.1,.32,c,0,.68,.5); tail.rotation.x = -0.6;
+    for (const lx of [-1,1]) for (const lz of [-1,1]) m(.12,.3,.12,0x8a6020,lx*.14,.15,lz*.26);
+    collar = m(.44,.44,.1,0xdd2222,0,.5,-.3);
+  } else {
+    const c = Math.random() < .5 ? 0xd9822b : 0x8a8a8a;
+    m(.3,.3,.6,c,0,.45,0);
+    m(.27,.26,.26,c,0,.65,-.38);
+    m(.08,.1,.06,c,-.08,.84,-.38); m(.08,.1,.06,c,.08,.84,-.38);   // pointy ears
+    m(.06,.04,.03,0xffaaaa,0,.62,-.52); m(.05,.08,.03,0x2a9d3a,-.06,.68,-.52); m(.05,.08,.03,0x2a9d3a,.06,.68,-.52);                             // nose
+    tail = m(.07,.07,.5,c,0,.62,.45); tail.rotation.x = -0.7;
+    for (const lx of [-1,1]) for (const lz of [-1,1]) m(.09,.3,.09,0x555555,lx*.1,.15,lz*.2);
+    collar = m(.34,.34,.1,0x2288ee,0,.45,-.2);
+  }
+  collar.visible = false;
+  g.position.set(x, y, z); scene.add(g);
+  pets.push({g, pet:true, type, tail, collar, tamed:false, sit:false, stuck:0, dir:Math.random()*6.28, timer:0, moving:false});
+}
+function tpPet(p){
+  for (let i=0; i<12; i++) {
+    const a = Math.random()*6.28, r = 1.5 + Math.random()*1.5, x = player.x + Math.cos(a)*r, z = player.z + Math.sin(a)*r, y = stand(x,z,player.y);
+    if (y >= 0 && Math.abs(y - player.y) < 3) { p.g.position.set(x,y,z); return; }
+  }
+}
+function updatePets(dt){
+  for (const p of pets) {
+    const pos = p.g.position;
+    if (ride.on && ride.lion === p) { p.g.rotation.y = p.dir; continue; }
+    const dx = player.x - pos.x, dz = player.z - pos.z, d = Math.hypot(dx,dz);
+    const sp = p.own ? 4 : p.type==='lion' ? 4.2 : p.type==='dog' ? 3.4 : 3;
+    if (!p.tamed) wander(p, dt, p.type==='dog' ? 1.4 : 1.2, petOk);
+    else if (!p.sit) {
+      const stop = p.own ? (leashOn ? 2.5 : 6) : 3;
+      if (d > (p.own && leashOn ? 7 : 25)) tpPet(p);
+      else if (d > stop) {
+        const base = Math.atan2(-dx,-dz); let moved = false;
+        for (const off of [0,.7,-.7,1.4,-1.4]) {
+          const nd = base+off, nx = pos.x - Math.sin(nd)*sp*dt, nz = pos.z - Math.cos(nd)*sp*dt;
+          if (petOk(nx,nz,pos)) { pos.x = nx; pos.z = nz; p.dir = nd; moved = true; break; }
+        }
+        p.stuck = moved ? 0 : p.stuck + dt;
+        if (p.stuck > 2.5 && d > 5) { tpPet(p); p.stuck = 0; }
+      } else if (p.own && !leashOn) wander(p, dt, 1.8, petOk);   // off the lead the puppy plays nearby
     }
-    p.y = topY(p.x,p.z) + 1; a.g.rotation.y = a.dir;
+    if (p.tail) p.tail.rotation.y = (p.tamed && d < 8) ? Math.sin(clock*(p.own ? 18 : 12))*.5 : 0;   // happy tail wag
+    const y = stand(pos.x, pos.z, pos.y); if (y >= 0) pos.y = y;
+    p.g.rotation.y = p.dir;
   }
 }
 
-// ---------- PLAYER ----------
-const player = { x:W/2, y:heightAt(W/2,W/2)+3, z:W/2, vx:0, vy:0, vz:0, onGround:false, yaw:0, pitch:0 };
-const R = 0.3, HEIGHT = 1.8;
+// ----- floating text / hearts -----
+function textTex(text, font, w, h, outline){
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle';
+  if (outline) { x.lineWidth = 6; x.strokeStyle = 'rgba(0,0,0,.7)'; x.strokeText(text, w/2, h/2); x.fillStyle = '#fff'; }
+  x.fillText(text, w/2, h/2);
+  return new THREE.CanvasTexture(c);
+}
+const heartTex = textTex('💖', '48px serif', 64, 64, false);
+const hearts = [];
+function spawnHearts(p, n){
+  for (let i=0; i<n; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({map:heartTex, transparent:true, fog:false}));
+    s.scale.set(.4,.4,.4);
+    s.position.set(p.x+(Math.random()-.5)*.6, p.y+1.2+Math.random()*.3, p.z+(Math.random()-.5)*.6);
+    scene.add(s); hearts.push({s, t:1.2});
+  }
+}
+function updateHearts(dt){
+  for (let i=hearts.length-1; i>=0; i--) {
+    const h = hearts[i]; h.t -= dt; h.s.position.y += dt*.8; h.s.material.opacity = Math.min(1, h.t);
+    if (h.t <= 0) { scene.remove(h.s); hearts.splice(i,1); }
+  }
+}
+
+// ----- teddy bears -----
+const teddies = [];
+function makeTeddy(x, y, z, rotY){
+  const g = new THREE.Group(), box = mk(g), c = 0xb8793f, l = 0xe8c79a;
+  box(.24,.26,.2,c,0,.17,0); box(.14,.16,.02,l,0,.17,-.11);                       // body + tummy
+  box(.26,.22,.22,c,0,.43,0); box(.1,.07,.04,l,0,.4,-.13); box(.04,.03,.02,0x222222,0,.42,-.15);   // head, snout, nose
+  box(.035,.045,.02,0x111111,-.06,.46,-.115); box(.035,.045,.02,0x111111,.06,.46,-.115);            // eyes
+  box(.08,.08,.06,c,-.1,.57,0); box(.08,.08,.06,c,.1,.57,0);                      // ears
+  box(.07,.16,.08,c,-.16,.18,-.02); box(.07,.16,.08,c,.16,.18,-.02);              // arms
+  box(.09,.1,.12,c,-.07,.06,-.08); box(.09,.1,.12,c,.07,.06,-.08);                // legs
+  box(.12,.04,.03,0xdd2222,0,.3,-.11);                                            // bow tie
+  g.scale.setScalar(1.4); g.rotation.y = rotY; g.position.set(x,y,z); scene.add(g);
+  teddies.push({g, teddy:true});
+}
+function placeTeddy(){
+  if (!bag.teddy) return toast('You have no teddy bear in your bag');
+  const a = aim(); let x, y, z;
+  if (a && a.prev) { x = a.prev[0]+.5; z = a.prev[2]+.5; y = a.prev[1]; }
+  else { x = player.x - Math.sin(player.yaw)*1.2; z = player.z - Math.cos(player.yaw)*1.2; y = player.y; }
+  const gy = stand(x, z, y); if (gy < 0) return;
+  makeTeddy(x, gy, z, player.yaw + Math.PI); bag.teddy--; spawnHearts({x, y:gy, z}, 3); toast('🧸 Teddy is sitting here');
+}
+for (const t of houseTeddies) makeTeddy(t[0], t[1], t[2], t[3]);
+
+// ----- your own puppy, with a harness and a lead -----
+const PUPPY_NAME = 'Biscuit';     // change this to rename your puppy!
+function makePuppy(x, z, y){
+  const g = new THREE.Group();
+  const m = (w,h,d,c,px,py,pz) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c})); me.position.set(px,py,pz); g.add(me); return me; };
+  const fur = 0xf0c27a, light = 0xfff1d6, blue = 0x2a7de1;
+  m(.32,.28,.52,fur,0,.36,0);                           // chubby body
+  m(.4,.36,.36,fur,0,.62,-.34);                         // big round head
+  m(.2,.14,.14,light,0,.55,-.55);                       // muzzle
+  m(.07,.06,.04,0x111111,0,.6,-.63);                    // nose
+  m(.06,.04,.05,0xff7a90,0,.5,-.58);                    // tongue
+  for (const s of [-1,1]) {
+    m(.09,.12,.03,0x111111,s*.1,.67,-.525); m(.03,.04,.03,0xffffff,s*.09,.7,-.54);   // big shiny eyes
+    m(.1,.24,.1,0xb9803a,s*.23,.6,-.34);                // floppy ears
+    m(.08,.05,.03,0xff9aa8,s*.16,.55,-.525);            // blush
+  }
+  const tail = m(.08,.08,.3,fur,0,.5,.34); tail.rotation.x = -.7;
+  for (const lx of [-1,1]) for (const lz of [-1,1]) m(.1,.22,.1,light,lx*.11,.11,lz*.18);
+  m(.35,.31,.08,blue,0,.36,-.1); m(.35,.31,.08,blue,0,.36,.14); m(.1,.3,.34,blue,0,.37,.02);   // harness straps
+  m(.08,.08,.06,0xffd23a,0,.54,.02);                    // gold ring for the lead
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({map:textTex(PUPPY_NAME+' 🐶','bold 34px sans-serif',256,64,true), transparent:true, fog:false}));
+  tag.scale.set(1.3,.32,1); tag.position.y = 1.1; g.add(tag);
+  g.position.set(x,y,z); scene.add(g);
+  pets.push({g, pet:true, own:true, type:'puppy', tail, ring:new THREE.Vector3(0,.55,.02), collar:{visible:true}, tamed:true, sit:false, stuck:0, dir:0, timer:0, moving:false});
+}
+
+// ----- your tamed lion -----
+const LION_NAME = 'Aryan';          // change this to rename your lion!
+function makeLion(x, z, y, zoo){
+  const g = new THREE.Group();
+  const m = (w,h,d,c,px,py,pz,parent) => { const me = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c})); me.position.set(px,py,pz); (parent||g).add(me); return me; };
+  const fur = 0xd9a441, mane = 0x8a5a1e, light = 0xf2d9a0;
+  m(.6,.55,1.1,fur,0,.78,0);                                   // big strong body
+  for (const lx of [-1,1]) for (const lz of [-1,1]) { m(.18,.5,.18,fur,lx*.2,.25,lz*.38); m(.2,.1,.22,light,lx*.2,.05,lz*.38-.02); }   // legs + paws
+  m(.74,.74,.34,mane,0,1.02,-.5);                              // fluffy mane
+  m(.44,.42,.4,fur,0,1.0,-.64);                                // head
+  m(.26,.18,.14,light,0,.92,-.87); m(.1,.07,.04,0x4a2a2a,0,.97,-.95);   // muzzle + nose
+  m(.1,.04,.03,0x4a2a2a,0,.88,-.94);                           // little smile
+  for (const s of [-1,1]) {
+    m(.09,.11,.03,0x111111,s*.12,1.06,-.845); m(.03,.04,.03,0xffffff,s*.11,1.1,-.86);   // big shiny eyes
+    m(.1,.06,.03,0xff9aa8,s*.18,.94,-.845);                    // rosy cheeks
+    m(.12,.12,.07,fur,s*.2,1.27,-.62); m(.06,.06,.03,0xf2b0b0,s*.2,1.27,-.66);          // round ears
+  }
+  const tail = new THREE.Group(); tail.position.set(0,.85,.55); tail.rotation.x = -.5; g.add(tail);
+  m(.08,.08,.55,fur,0,0,.27,tail); m(.15,.15,.16,mane,0,0,.6,tail);                    // tail + fluffy tip
+  let collar; if (!zoo) { collar = m(.66,.6,.1,0xdd2222,0,.78,-.4); m(.1,.1,.03,0xffd23a,0,.6,-.46); }    // red collar + gold tag
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({map:textTex(LION_NAME+' 🦁','bold 34px sans-serif',256,64,true), transparent:true, fog:false}));
+  tag.scale.set(1.3,.32,1); tag.position.y = 1.75; if (!zoo) g.add(tag);
+  g.position.set(x,y,z); scene.add(g);
+  if (zoo) return g;
+  pets.push({g, pet:true, type:'lion', tail, collar, tamed:true, sit:false, stuck:0, dir:0, timer:0, moving:false});
+}
+
+// ---------- THE ZOO (animals, signs) ----------
+const zooAnimals = [];
+function buildZoo(kind){
+  const g = new THREE.Group(), box = mk(g);
+  const legs = (lx, lh, lw, lz, c) => { for (const a of [-1,1]) for (const b of [-1,1]) box(lw,lh,lw,c,a*lx,lh/2,b*lz); };
+  if (kind === 'elephant') {
+    const c = 0x9a9aa6, d = 0x84848f;
+    legs(.3,.5,.3,.45,d); box(.9,.85,1.4,c,0,.92,0); box(.66,.6,.6,c,0,1.1,-.95);
+    box(.2,.6,.2,c,0,.78,-1.35); box(.22,.1,.22,0x80808a,0,.5,-1.35);                          // trunk
+    box(.08,.6,.55,0xb4a0aa,-.4,1.15,-.85); box(.08,.6,.55,0xb4a0aa,.4,1.15,-.85);           // big ears
+    box(.07,.07,.35,0xf5f0e0,-.25,.72,-1.35); box(.07,.07,.35,0xf5f0e0,.25,.72,-1.35);       // tusks
+    box(.06,.45,.06,d,0,.85,.75); cuteFace(box,1.14,-1.25);
+  } else if (kind === 'giraffe') {
+    const c = 0xe8b640, sp = 0xa8641f;
+    legs(.2,1.0,.15,.35,c); box(.55,.6,1.0,c,0,1.3,0); box(.22,1.1,.22,c,0,1.95,-.45); box(.36,.32,.45,c,0,2.65,-.6);
+    box(.2,.14,.12,0xf2d9a0,0,2.57,-.85); box(.05,.15,.05,0x6a4a1e,-.08,2.88,-.5); box(.05,.15,.05,0x6a4a1e,.08,2.88,-.5);
+    box(.1,.1,.05,c,-.21,2.75,-.5); box(.1,.1,.05,c,.21,2.75,-.5);
+    for (const sx of [-1,1]) for (const [y,z] of [[1.4,-.3],[1.2,.1],[1.45,.3],[1.2,-.1]]) box(.02,.16,.18,sp,sx*.28,y,z);
+    box(.05,.5,.05,c,0,1.2,.55); box(.08,.12,.08,0x6a4a1e,0,.9,.55); cuteFace(box,2.68,-.825);
+  } else if (kind === 'zebra') {
+    const w = 0xf4f4f4, k = 0x222222;
+    legs(.17,.55,.13,.32,w); box(.5,.5,.95,w,0,.8,0);
+    for (let i=0; i<5; i++) box(.52,.52,.07,k,0,.8,-.38+i*.19);                                 // stripes
+    box(.24,.4,.28,w,0,1.1,-.5); box(.36,.36,.5,w,0,1.15,-.7);
+    box(.38,.38,.06,k,0,1.15,-.6); box(.38,.38,.06,k,0,1.15,-.78);
+    box(.2,.16,.1,0x333333,0,1.03,-.97); box(.08,.35,.5,k,0,1.42,-.5);
+    box(.1,.14,.06,w,-.14,1.4,-.7); box(.1,.14,.06,w,.14,1.4,-.7); box(.06,.4,.06,k,0,.75,.55); cuteFace(box,1.17,-.95);
+  } else if (kind === 'panda') {
+    const w = 0xf6f6f6, k = 0x222222;
+    box(.7,.62,.75,w,0,.6,0); for (const a of [-1,1]) for (const b of [-1,1]) box(.22,.35,.22,k,a*.23,.18,b*.25);
+    box(.2,.5,.2,k,-.42,.65,-.15); box(.2,.5,.2,k,.42,.65,-.15);
+    box(.62,.52,.52,w,0,1.15,-.4); box(.18,.18,.1,k,-.26,1.5,-.4); box(.18,.18,.1,k,.26,1.5,-.4);
+    box(.2,.22,.03,k,-.15,1.18,-.665); box(.2,.22,.03,k,.15,1.18,-.665);                         // eye patches
+    box(.22,.16,.08,0xfafafa,0,1.02,-.7); box(.1,.07,.04,k,0,1.08,-.75); cuteFace(box,1.15,-.66);
+  } else {   // penguin
+    const k = 0x2a2a35, o = 0xffa020;
+    box(.42,.72,.34,k,0,.55,0); box(.3,.56,.05,0xffffff,0,.5,-.18); box(.4,.36,.36,k,0,1.08,0);
+    box(.3,.2,.03,0xffffff,0,1.08,-.185); box(.14,.08,.12,o,0,1.0,-.24);
+    box(.14,.05,.22,o,-.1,.03,-.06); box(.14,.05,.22,o,.1,.03,-.06);
+    box(.07,.4,.22,k,-.26,.55,0); box(.07,.4,.22,k,.26,.55,0); cuteFace(box,1.09,-.18);
+    g.scale.setScalar(1.15);
+  }
+  return g;
+}
+const ZOO_SPEC = {
+  lion:{name:'Lions',emoji:'🦁',n:2,speed:.9}, elephant:{name:'Elephants',emoji:'🐘',n:2,speed:.8}, giraffe:{name:'Giraffes',emoji:'🦒',n:2,speed:.9},
+  zebra:{name:'Zebras',emoji:'🦓',n:3,speed:1.2}, panda:{name:'Pandas',emoji:'🐼',n:2,speed:.8}, penguin:{name:'Penguins',emoji:'🐧',n:4,speed:1}
+};
+for (const pn of zoo.pens) {
+  const sp = ZOO_SPEC[pn.kind];
+  const sign = new THREE.Sprite(new THREE.SpriteMaterial({map:textTex(sp.emoji+' '+sp.name,'bold 40px sans-serif',320,64,true), transparent:true, fog:false}));
+  sign.scale.set(3.2,.64,1); sign.position.set(pn.x0+5, zoo.h+4.7, pn.gz+.5); scene.add(sign);
+  for (let i=0; i<sp.n; i++) {
+    let x, z;
+    for (let t=0; t<30; t++) { x = pn.x0+2+Math.random()*6; z = pn.z0+2+Math.random()*4.5; if (!get(Math.floor(x),zoo.h+1,Math.floor(z))) break; }
+    const g = pn.kind === 'lion' ? makeLion(0,0,0,true) : buildZoo(pn.kind);
+    g.position.set(x, zoo.h+1, z); g.rotation.y = Math.random()*6.28; scene.add(g);
+    zooAnimals.push({g, zoo:true, name:sp.name, emoji:sp.emoji, kind:pn.kind, pen:pn, dir:g.rotation.y, timer:0, moving:false, speed:sp.speed});
+  }
+}
+const arch = new THREE.Sprite(new THREE.SpriteMaterial({map:textTex('🦁 ZOO 🐘','bold 56px sans-serif',400,90,true), transparent:true, fog:false}));
+arch.scale.set(5,1.1,1); arch.position.set(zoo.x-21.5, zoo.h+7, zoo.z+.5); scene.add(arch);
+// ---------- MANSION SIGNS ----------
+function signAt(text, x, y, z, w){
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:textTex(text,'bold 40px sans-serif',360,64,true), transparent:true, fog:false}));
+  sp.scale.set(w, w*.18, 1); sp.position.set(ox+x, MH+y, oz+z); scene.add(sp);
+}
+signAt('🏰 Our Mansion', 12.5, 11, 19.5, 6);
+signAt("Aryan's Den 🦁", 4.5, 4.2, 12.5, 2.8); signAt('Kitchen 🍎', 4.5, 4.2, 4.5, 2.4); signAt('✨ Great Hall', 12.5, 4.2, 9, 2.8);
+signAt('Library 📚', 20.5, 4.2, 12.5, 2.4); signAt('Bathroom 🛁', 20.5, 4.2, 4.5, 2.6);
+signAt('Bedroom 🛏️', 6.5, 8.2, 8.5, 2.6); signAt('Sky Lounge ☁️', 19.5, 8.2, 8.5, 2.8);
+
+// ---------- WILD SAVANNA HERDS ----------
+const herds = [];
+const farFromBuilt = (x,z) => Math.hypot(x-VC.x,z-VC.z) > 22 && Math.hypot(x-zoo.x,z-zoo.z) > 30 && Math.hypot(x-PC.x,z-PC.z) > 30 && Math.hypot(x-MC.x,z-MC.z) > 28;
+const plainGround = (x,z) => { const t = get(Math.floor(x), topY(x,z), Math.floor(z)); return t === 1 || t === 5; };      // grass or sand
+const plainOk = (nx,nz,p) => nx>2 && nx<W-2 && nz>2 && nz<W-2 && farFromBuilt(nx,nz) && plainGround(nx,nz) && Math.abs(topY(nx,nz)+1 - p.y) <= 1;
+for (const [kind, count, herdSize] of [['zebra',12,4],['giraffe',6,3],['elephant',4,2]]) {
+  let hx = 0, hz = 0;
+  for (let i=0; i<count; i++) {
+    if (i % herdSize === 0) for (let t=0; t<300; t++) { hx = 6 + Math.random()*(W-12); hz = 6 + Math.random()*(W-12); if (farFromBuilt(hx,hz) && plainGround(hx,hz)) break; }
+    const x = hx + (Math.random()-.5)*6, z = hz + (Math.random()-.5)*6;
+    if (!farFromBuilt(x,z) || !plainGround(x,z)) continue;
+    const g = buildZoo(kind), sp = ZOO_SPEC[kind];
+    g.position.set(x, topY(x,z)+1, z); g.rotation.y = Math.random()*6.28; scene.add(g);
+    herds.push({g, zoo:true, name:sp.name, emoji:sp.emoji, kind, dir:g.rotation.y, timer:0, moving:false, speed:sp.speed});
+  }
+}
+
+
+// ---------- PRIDE ROCK CHARACTERS ----------
+const prideCast = [];
+function lionLike(o){
+  const g = new THREE.Group(), box = mk(g), fur = o.fur, light = 0xf2d9a0;
+  box(.6,.55,1.1,fur,0,.78,0);
+  for (const a of [-1,1]) for (const b of [-1,1]) { box(.18,.5,.18,fur,a*.2,.25,b*.38); box(.2,.1,.22,light,a*.2,.05,b*.38-.02); }
+  if (o.mane) box(.74,.74,.34,o.mane,0,1.02,-.5);
+  box(.44,.42,.4,fur,0,1.0,-.64);
+  box(.26,.18,.14,light,0,.92,-.87); box(.1,.07,.04,0x4a2a2a,0,.97,-.95); box(.1,.04,.03,0x4a2a2a,0,.88,-.94);
+  for (const q of [-1,1]) {
+    box(.09,.11,.03,o.eye || 0x111111,q*.12,1.06,-.845); box(.03,.04,.03,0xffffff,q*.11,1.1,-.86);
+    box(.1,.06,.03,0xff9aa8,q*.18,.94,-.845);
+    box(.12,.12,.07,fur,q*.2,1.27,-.62); box(.06,.06,.03,0xf2b0b0,q*.2,1.27,-.66);
+  }
+  box(.08,.08,.5,fur,0,.92,.8); box(.15,.15,.16,o.tuft || 0x8a5a1e,0,.95,1.1);              // tail + tip
+  if (o.scar) box(.025,.24,.03,0x3a1a1a,-.12,1.04,-.86);                                    // a little scar
+  if (o.crown) { box(.34,.07,.3,0xffd23a,0,1.28,-.62); for (const i of [-1,0,1]) box(.07,.1,.07,0xffd23a,i*.12,1.35,-.62); }
+  if (o.topknot) box(.12,.12,.12,0xb5502a,0,1.28,-.64);
+  return g;
+}
+function buildMeerkat(){
+  const g = new THREE.Group(), box = mk(g), c = 0xcfa56a, d = 0x6a4a2a, belly = 0xf0dcb8;
+  box(.2,.4,.16,c,0,.5,0); box(.13,.26,.03,belly,0,.5,-.09);
+  box(.08,.3,.1,c,-.06,.15,0); box(.08,.3,.1,c,.06,.15,0);
+  box(.22,.2,.22,c,0,.85,-.02); box(.07,.1,.05,d,-.1,.97,0); box(.07,.1,.05,d,.1,.97,0);
+  box(.08,.1,.03,d,-.07,.88,-.125); box(.08,.1,.03,d,.07,.88,-.125);                       // eye patches
+  box(.1,.08,.08,belly,0,.8,-.14); box(.04,.03,.03,0x222222,0,.82,-.19);
+  box(.06,.22,.06,c,-.14,.55,-.05); box(.06,.22,.06,c,.14,.55,-.05); box(.05,.05,.35,c,0,.1,.22);
+  cuteFace(box,.87,-.135); return g;
+}
+function buildWarthog(){
+  const g = new THREE.Group(), box = mk(g), c = 0x8a7060, d = 0x5a4030;
+  for (const a of [-1,1]) for (const b of [-1,1]) box(.12,.3,.12,d,a*.18,.15,b*.28);
+  box(.5,.45,.8,c,0,.5,0); box(.42,.4,.4,c,0,.55,-.55);
+  box(.26,.2,.12,0xa88a78,0,.48,-.8); box(.04,.05,.03,0x222222,-.06,.5,-.87); box(.04,.05,.03,0x222222,.06,.5,-.87);
+  box(.05,.22,.05,0xf5f0e0,-.15,.55,-.86); box(.05,.22,.05,0xf5f0e0,.15,.55,-.86);         // tusks
+  for (let i=0; i<5; i++) box(.06,.2,.08,0x2a2a2a,0,.78+(i<3?0:0),-.3+i*.15);              // mohawk
+  box(.1,.12,.05,c,-.17,.8,-.5); box(.1,.12,.05,c,.17,.8,-.5); box(.04,.3,.04,d,0,.65,.45); box(.08,.08,.08,0x2a2a2a,0,.82,.45);
+  cuteFace(box,.58,-.75); return g;
+}
+function buildBaboon(){
+  const g = new THREE.Group(), box = mk(g), c = 0x7a5a3a, face = 0xd9a0a0;
+  box(.14,.3,.14,c,-.1,.15,0); box(.14,.3,.14,c,.1,.15,0); box(.38,.5,.26,c,0,.55,0); box(.3,.3,.03,0xd9b090,0,.58,-.14);
+  box(.34,.3,.3,c,0,1.0,-.02); box(.4,.14,.36,0xb8a070,0,1.19,0);                          // head + light hair
+  box(.24,.18,.03,face,0,.98,-.17); box(.16,.12,.1,face,0,.93,-.2); box(.06,.04,.03,0x222222,0,.95,-.26);
+  box(.1,.4,.1,c,-.26,.6,0); box(.1,.4,.1,c,.26,.6,0);
+  box(.05,1.1,.05,0x6b4b28,.34,.55,-.12); box(.14,.14,.14,0xd8a030,.34,1.15,-.12);        // staff with a gourd
+  cuteFace(box,1.0,-.185); return g;
+}
+function buildHornbill(){
+  const g = new THREE.Group(), box = mk(g), blue = 0x3a6ea5, dk = 0x1a3a6a;
+  box(.26,.26,.4,blue,0,0,0); box(.2,.2,.2,blue,0,.1,-.28);
+  box(.1,.1,.3,0xffd23a,0,.05,-.5); box(.1,.04,.3,0xdd3322,0,.11,-.5); box(.16,.04,.3,dk,0,0,.32);
+  box(.04,.05,.03,0x111111,-.07,.14,-.385); box(.04,.05,.03,0x111111,.07,.14,-.385);
+  const mkWing = a => { const w = new THREE.Group(); w.position.set(a*.13,.08,0); const me = new THREE.Mesh(new THREE.BoxGeometry(.45,.04,.28), new THREE.MeshBasicMaterial({color:dk})); me.position.x = a*.22; w.add(me); g.add(w); return w; };
+  g.userData = {wl:mkWing(-1), wr:mkWing(1)}; return g;
+}
+function buildHyena(){
+  const g = new THREE.Group(), box = mk(g), c = 0xb09a6a, d = 0x4a3a20;
+  for (const a of [-1,1]) { box(.1,.4,.1,c,a*.15,.2,-.3); box(.1,.3,.1,c,a*.15,.15,.3); }
+  box(.45,.4,.9,c,0,.58,0); box(.08,.15,.8,d,0,.85,0);
+  for (const a of [-1,1]) for (const [y,z] of [[.6,-.2],[.5,.15],[.65,.25]]) box(.02,.1,.1,d,a*.23,y,z);
+  box(.38,.36,.4,c,0,.8,-.6); box(.22,.16,.2,0x8a7a50,0,.72,-.85); box(.08,.06,.04,0x111111,0,.78,-.96);
+  box(.16,.16,.05,c,-.2,1.03,-.55); box(.16,.16,.05,c,.2,1.03,-.55); box(.08,.08,.04,d,-.2,1.03,-.58); box(.08,.08,.04,d,.2,1.03,-.58);
+  box(.18,.03,.03,0x222222,0,.66,-.96); box(.03,.03,.03,0xffffff,-.06,.68,-.965); box(.03,.03,.03,0xffffff,.06,.68,-.965);   // big grin
+  box(.06,.06,.3,d,0,.62,.55); cuteFace(box,.84,-.8); return g;
+}
+function nameTag(g, text, wy, s){
+  const t = new THREE.Sprite(new THREE.SpriteMaterial({map:textTex(text,'bold 34px sans-serif',256,64,true), transparent:true, fog:false}));
+  t.scale.set(1.3/s,.32/s,1); t.position.y = wy/s; g.add(t);
+}
+function addCast(g, x, y, z, o){
+  const s = o.s || 1;
+  g.position.set(x,y,z); g.rotation.y = o.front || 0; g.scale.setScalar(s); scene.add(g);
+  nameTag(g, o.name+' '+o.emoji, o.tagY, s);
+  prideCast.push(Object.assign({g, cast:true, dir:g.rotation.y, timer:0, moving:false, speed:1, s, ang:Math.random()*6.28}, o));
+}
+const groundOk = (nx,nz) => Math.hypot(nx-PC.x,nz-PC.z) < 20 && !get(Math.floor(nx),PH+1,Math.floor(nz)) && get(Math.floor(nx),PH,Math.floor(nz));
+const LEDGE = PH+10, FRONT = Math.PI;       // standing height on the ledge; facing the front (+z)
+const rockSpot = (dx,dz) => ({x:PC.x+dx, z:PC.z+dz, y:topY(PC.x+dx,PC.z+dz)+1});
+addCast(lionLike({fur:0xd2952e, mane:0x5a3412, crown:true}), PC.x+.5, LEDGE, PC.z+11.2, {s:1.25, front:FRONT, static:true, name:'Mufasa', emoji:'👑', tagY:2.5,
+  lines:['Welcome to Pride Rock, little explorer! 🦁','A good king looks after everyone.','You can see the whole savanna from up here!']});
+addCast(lionLike({fur:0xe3b86a}), PC.x+2.4, LEDGE, PC.z+10.3, {s:1.05, front:FRONT, static:true, name:'Sarabi', emoji:'🦁', tagY:2.1,
+  lines:['Careful on the ledge, little ones!','Come and rest in the shade with us.','I am so proud of our little cub.']});
+addCast(lionLike({fur:0xeec36a, topknot:true}), PC.x-1.0, LEDGE, PC.z+10.6, {s:.5, front:FRONT, static:true, name:'Simba', emoji:'🐾', tagY:1.1, food:true,
+  lines:['Wanna play? 🐾','Look how big my roar is... rawr!','Can I have an apple? 🍎']});
+{ const r = rockSpot(-6,-3); addCast(lionLike({fur:0x9a7a40, mane:0x1a1a1a, scar:true, tuft:0x1a1a1a}), r.x, r.y, r.z, {s:1.15, front:FRONT, static:true, name:'Grumbles', emoji:'😾', tagY:2.3,
+  lines:["Hmph. I'm not grumpy... I'm just misunderstood.",'Nobody ever asks about MY mane.',"Fine, you can stay. But don't touch my rock."]}); }
+{ const r = rockSpot(5,-2); addCast(buildBaboon(), r.x, r.y, r.z, {s:1.2, front:FRONT, static:true, name:'Sage', emoji:'🐵', tagY:2.0,
+  lines:['Wise words: always eat your apples. 🍎','The sun rises, the sun sets, and the grass keeps growing.','*taps staff* Peace, friend.']}); }
+addCast(buildMeerkat(),  PC.x-6, PH+1, PC.z+10, {s:1.3, ok:groundOk, speed:1.2, name:'Pip', emoji:'😎', tagY:1.6, food:true,
+  lines:['Wanna hear a joke? Why did the lion cross the road? To get to the other pride!','I love bugs! 🐛','Take it easy, friend!']});
+addCast(buildWarthog(),  PC.x-8, PH+1, PC.z+13, {s:1.2, ok:groundOk, speed:1.1, name:'Boomer', emoji:'🐗', tagY:1.5, food:true,
+  lines:['Did somebody say grubs? 🪲',"I'm not smelly, I'm rustic!",'Oink! ...I mean, hello!']});
+[['Giggles',12,-10],['Chuckles',-12,-12],['Snicker',14,-3]].forEach(([nm,dx,dz]) => addCast(buildHyena(), PC.x+dx, PH+1, PC.z+dz, {s:1.1, ok:groundOk, speed:1.5, name:nm, emoji:'🤪', tagY:1.8,
+  lines:['Hehehe! Want to see my best laugh?',"We're not scary, we just laugh a lot!",'Hee hee hee! You are funny!']}));
+addCast(buildHornbill(), PC.x+13, PH+15, PC.z, {s:1.4, fly:true, name:'Zazu', emoji:'🐦', tagY:.7,
+  lines:['Squawk! Beautiful day for flying!','I can see the zoo from up here!']});
+function updateCast(dt){
+  for (const c of prideCast) {
+    const p = c.g.position, dx = player.x-p.x, dz = player.z-p.z, near = Math.hypot(dx,dz) < 5;
+    if (c.fly) {
+      c.ang += dt*.45;
+      p.set(PC.x + Math.cos(c.ang)*13, PH+15 + Math.sin(c.ang*3)*1.2, PC.z + Math.sin(c.ang)*13);
+      c.g.rotation.y = Math.atan2(Math.sin(c.ang), -Math.cos(c.ang));
+      const f = Math.sin(clock*14)*.6; c.g.userData.wl.rotation.z = f; c.g.userData.wr.rotation.z = -f;
+    } else if (c.static) c.g.rotation.y = near ? Math.atan2(-dx,-dz) : c.front;
+    else if (near) { c.dir = Math.atan2(-dx,-dz); c.moving = false; c.timer = 1; c.g.rotation.y = c.dir; }
+    else wander(c, dt, c.speed, c.ok);
+    if (c.ok) c.g.scale.y = c.s * (1 + (c.moving ? .05*Math.sin(clock*12) : 0));
+  }
+}
+const leadMesh = new THREE.Mesh(new THREE.BoxGeometry(.04,.04,1), new THREE.MeshBasicMaterial({color:0xdd2222}));
+leadMesh.visible = false; scene.add(leadMesh);
+function updateLead(){
+  const pup = pets.find(p => p.own);
+  if (!pup || !leashOn) { leadMesh.visible = false; return; }
+  let a;
+  if (camMode === 0) a = camera.localToWorld(new THREE.Vector3(.3,-.22,-.65));
+  else if (LOOK.body === 'cub') a = new THREE.Vector3(player.x, player.y+.5, player.z);
+  else { avatar.updateMatrixWorld(true); a = avatar.userData.rArm.localToWorld(new THREE.Vector3(0,-.62,0)); }
+  pup.g.updateMatrixWorld();
+  const b = pup.g.localToWorld(pup.ring.clone());
+  leadMesh.position.copy(a).add(b).multiplyScalar(.5);
+  leadMesh.lookAt(b); leadMesh.scale.z = Math.max(.05, a.distanceTo(b)); leadMesh.visible = true;
+}
+
+// 1 dog + 1 cat in the village, 2 dogs + 2 cats out in the wild
+for (const [type, inVillage] of [['dog',true],['cat',true],['dog',false],['dog',false],['dog',false],['cat',false],['cat',false],['cat',false]]) {
+  for (let t=0; t<500; t++) {
+    const x = inVillage ? VC.x + (Math.random()-.5)*28 : Math.random()*(W-4)+2, z = inVillage ? VC.z + (Math.random()-.5)*28 : Math.random()*(W-4)+2;
+    if (inVillage ? walkable(x,z) : (topY(x,z) >= 9 && grassAt(x,z))) { makePet(type, x, z, inVillage ? VH+1 : topY(x,z)+1); break; }
+  }
+}
+
+function wander(a, dt, speed, okFn){
+  a.timer -= dt;
+  if (a.timer < 0) { a.timer = 1 + Math.random()*3; a.moving = Math.random() > 0.35; a.dir += (Math.random()-.5)*2.5; }
+  const p = a.g.position;
+  if (a.moving) {
+    const nx = p.x - Math.sin(a.dir)*speed*dt, nz = p.z - Math.cos(a.dir)*speed*dt;
+    if (okFn(nx,nz,p)) { p.x = nx; p.z = nz; } else a.dir += 1.6 + Math.random();
+  }
+  a.g.rotation.y = a.dir;
+}
+function updateCreatures(dt){
+  for (const a of animals) {
+    a.hurt = Math.max(0, a.hurt - dt);
+    wander(a, dt, a.hurt>0 ? 3 : 1.2, (nx,nz,p) => nx>1 && nx<W-1 && nz>1 && nz<W-1 && grassAt(nx,nz) && Math.abs(topY(nx,nz)+1 - p.y) <= 1);
+    a.g.position.y = topY(a.g.position.x, a.g.position.z) + 1;
+  }
+  for (const v of villagers) {
+    v.give = Math.max(0, v.give - dt);
+    const dx = player.x - v.g.position.x, dz = player.z - v.g.position.z;
+    if (Math.hypot(dx,dz) < 4) { v.dir = Math.atan2(-dx,-dz); v.moving = false; v.timer = 1; v.g.rotation.y = v.dir; }   // turns to look at you
+    else wander(v, dt, 1, walkable);
+  }
+  for (const e of animals.concat(villagers, zooAnimals, herds)) e.g.scale.y = 1 + (e.moving ? .05*Math.sin(clock*12 + e.g.id) : 0);   // happy bounce
+  updatePets(dt);
+  updateCast(dt);
+  for (const h of herds) { wander(h, dt, h.speed, plainOk); h.g.position.y = topY(h.g.position.x, h.g.position.z) + 1; }
+  for (const z of zooAnimals) { const pn = z.pen; wander(z, dt, z.speed, (nx,nz) => nx>pn.x0+1.3 && nx<pn.x0+8.7 && nz>pn.z0+1.3 && nz<pn.z0+7.7 && !get(Math.floor(nx),zoo.h+1,Math.floor(nz))); }
+}
+
+// ---------- PLAYER, FOOD & HEALTH ----------
+const FOOD = { apple:{n:'Apple', e:'🍎', v:4}, bread:{n:'Bread', e:'🍞', v:5}, meat:{n:'Meat', e:'🥩', v:8} };
+const bag = {apple:2, bread:2, meat:0, teddy:1};
+let food = 20, health = 20, hpT = 0, lastStats = '';
+let leashOn = true, bedSpawn = null;
+const statsEl = document.getElementById('stats'), toastEl = document.getElementById('toast');
+let toastT = 0;
+function toast(t){ toastEl.textContent = t; toastT = 2.5; }
+function updateStats(){
+  const h = Math.max(0, Math.min(10, Math.ceil(health/2))), f = Math.max(0, Math.min(10, Math.ceil(food/2)));
+  const s = `<span style="color:#f44">${'♥'.repeat(h)}${'♡'.repeat(10-h)}</span><br>${'🍗'.repeat(f)}<span style="opacity:.5">${'·'.repeat(10-f)}</span><br>` +
+    Object.keys(FOOD).map(k => `${FOOD[k].e} ${bag[k]}`).join(' &nbsp; ') + ` &nbsp; 🧸 ${bag.teddy} <small>(F eat · T place teddy)</small>`;
+  if (s !== lastStats) { statsEl.innerHTML = s; lastStats = s; }
+}
+function eat(){
+  if (food >= 20) return toast("You're full!");
+  const order = food <= 12 ? ['meat','bread','apple'] : ['apple','bread','meat'];
+  const k = order.find(k => bag[k] > 0);
+  if (!k) return toast('No food! Hit animals, pick apples from trees, harvest wheat, or ask villagers.');
+  bag[k]--; food = Math.min(20, food + FOOD[k].v); toast(`Yum! ${FOOD[k].e}`);
+}
+const spawnPos = () => { if (bedSpawn) return {...bedSpawn}; const x = VC.x+0.5, z = VC.z+13.5; return {x, z, y: topY(x,z)+1.05}; };
+const player = { ...spawnPos(), vx:0, vy:0, vz:0, onGround:false, yaw:0, pitch:0 };
+function respawn(msg){ ride.on = false; Object.assign(player, spawnPos(), {vy:0}); food = 20; health = 20; if (msg) toast(msg); }
+{ const px = player.x-1.8, pz = player.z+.5, py = stand(px,pz,player.y); makeLion(px, pz, py >= 0 ? py : player.y); }   // your tamed lion!
+function useBed(x,y,z){
+  bedSpawn = {x:x+.5, y:y+1.05, z:z+.5};
+  const base = ((Math.PI/2 - 0.8)/(2*Math.PI))*120, dl = Math.sin(clock/120*Math.PI*2+0.8)*2+0.5;
+  if (dl < 0.4) { clock = Math.ceil((clock-base)/120)*120 + base; health = Math.min(20, health+6); spawnHearts(player,3); toast('💤 Zzz... Good morning! ☀️ This bed is now your spawn point'); }
+  else toast("It's not night yet, but this bed is now your spawn point 🛏️");
+}
+function useBath(){ health = 20; spawnHearts(player,4); toast('🛁 Ahh, a warm bubbly bath! Full hearts ❤️'); }
+let R = 0.3, HEIGHT = 1.8, EYE = 1.6;      // a lion cub is smaller, so these change
 function hits(x,y,z) {
   for (let i=Math.floor(x-R); i<=Math.floor(x+R); i++)
   for (let j=Math.floor(y); j<=Math.floor(y+HEIGHT); j++)
   for (let k=Math.floor(z-R); k<=Math.floor(z+R); k++) if (get(i,j,k)) return true;
   return false;
+}
+
+// ---------- YOUR BODY (you see it in third person) ----------
+let camMode = 1;      // 0 = first person, 1 = behind you, 2 = selfie view (press V)
+const avatar = new THREE.Group();
+{
+  const bx = (parent,w,h,d,c,x,y,z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c})); m.position.set(x,y,z); parent.add(m); return m; };
+  const skin = 0xe8b98a, shirt = 0x3a7bd5, pants = 0x2b3a67, hair = 0x5a3a1a;
+  bx(avatar,.5,.7,.3,shirt,0,1.0,0);                                             // body
+  const mkLeg = x => { const g = new THREE.Group(); g.position.set(x,.65,0); bx(g,.22,.65,.24,pants,0,-.325,0); bx(g,.24,.12,.28,0x222222,0,-.6,-.02); avatar.add(g); return g; };
+  const lLeg = mkLeg(-.12), rLeg = mkLeg(.12);
+  const mkArm = x => { const g = new THREE.Group(); g.position.set(x,1.3,0); bx(g,.22,.35,.22,shirt,0,-.175,0); bx(g,.2,.3,.2,skin,0,-.5,0); avatar.add(g); return g; };
+  const lArm = mkArm(-.37), rArm = mkArm(.37);
+  const head = new THREE.Group(); head.position.set(0,1.35,0); avatar.add(head);
+  bx(head,.46,.46,.46,skin,0,.23,0);
+  bx(head,.5,.12,.5,hair,0,.5,0); bx(head,.5,.32,.08,hair,0,.3,.22);              // hair
+  bx(head,.06,.2,.5,hair,-.24,.35,0); bx(head,.06,.2,.5,hair,.24,.35,0);
+  for (const s of [-1,1]) { bx(head,.09,.11,.03,0x111111,s*.11,.26,-.235); bx(head,.03,.04,.03,0xffffff,s*.1,.3,-.25); bx(head,.1,.06,.03,0xff9aa8,s*.17,.15,-.235); }   // eyes, sparkles, blush
+  bx(head,.12,.03,.03,0x7a3b2e,0,.1,-.235);                                       // smile
+  avatar.userData = {lLeg, rLeg, lArm, rArm, head};
+}
+scene.add(avatar);
+
+// ---------- HANDS (they hold the block you picked) ----------
+let swing = 0;
+const heldCv = document.createElement('canvas'); heldCv.width = heldCv.height = 16;
+const heldTex = new THREE.CanvasTexture(heldCv); heldTex.magFilter = heldTex.minFilter = THREE.NearestFilter; heldTex.generateMipmaps = false;
+function updateHeld(){
+  const c = heldCv.getContext('2d'); c.imageSmoothingEnabled = false; c.clearRect(0,0,16,16);
+  c.drawImage(atlas, BLOCKS[hotbar[selected]][2]*16, 0, 16, 16, 0, 0, 16, 16); heldTex.needsUpdate = true;
+}
+scene.add(camera);
+const handMat = c => new THREE.MeshBasicMaterial({color:c, depthTest:false, fog:false});
+function limb(x){
+  const g = new THREE.Group(); g.position.set(x,-.3,-.2);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(.13,.13,.5), handMat(0xe8b98a)); arm.position.z = -.2;
+  const sleeve = new THREE.Mesh(new THREE.BoxGeometry(.17,.17,.22), handMat(0x3a7bd5)); sleeve.position.z = -.02;
+  arm.renderOrder = sleeve.renderOrder = 999; g.add(arm, sleeve); camera.add(g); return g;
+}
+const rHand = limb(.32), lHand = limb(-.32);
+const held = new THREE.Mesh(new THREE.BoxGeometry(.22,.22,.22), new THREE.MeshBasicMaterial({map:heldTex, alphaTest:.5, depthTest:false, fog:false}));
+held.position.set(0,.13,-.5); held.rotation.set(.3,.6,0); held.renderOrder = 1000; rHand.add(held);
+
+// ---------- CHANGE YOUR AVATAR (press C) ----------
+const LOOK = {skin:0xe8b98a, hair:0x5a3a1a, shirt:0x3a7bd5, pants:0x2b3a67, hairStyle:'short', hat:'none', cape:'none', body:'human', fur:0xeec36a};
+try { Object.assign(LOOK, JSON.parse(localStorage.getItem('blockGameLook') || '{}')); } catch (err) {}
+let lookOpen = false, prevCam = 1, lastBody = 'human';
+// remember which parts are skin / hair / shirt / pants (by their starting colours)
+function tagRoles(root){
+  root.traverse(m => {
+    if (!m.isMesh) return;
+    const h = m.material.color.getHex(), r = h===0xe8b98a ? 'skin' : h===0x5a3a1a ? 'hair' : h===0x3a7bd5 ? 'shirt' : h===0x2b3a67 ? 'pants' : null;
+    if (r) { m.userData.role = r; if (r === 'hair') m.userData.hs = 'base'; }
+  });
+}
+tagRoles(avatar); tagRoles(rHand); tagRoles(lHand);
+const accBox = (parent,w,h,d,c,x,y,z,role,hs) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshBasicMaterial({color:c})); m.position.set(x,y,z); if (role) m.userData.role = role; if (hs) m.userData.hs = hs; parent.add(m); return m; };
+const headG = avatar.userData.head;
+accBox(headG,.5,.6,.08,0x5a3a1a,0,.0,.22,'hair','long');                 // long hair hanging down the back
+accBox(headG,.06,.4,.3,0x5a3a1a,-.24,.08,.1,'hair','long'); accBox(headG,.06,.4,.3,0x5a3a1a,.24,.08,.1,'hair','long');
+const hats = {};
+const mkHat = name => { const g = new THREE.Group(); g.visible = false; headG.add(g); hats[name] = g; return g; };
+{ const g = mkHat('crown'); accBox(g,.42,.08,.42,0xffd23a,0,.62,0); for (const x of [-.15,0,.15]) accBox(g,.08,.12,.08,0xffd23a,x,.72,0); accBox(g,.06,.06,.03,0xdd2244,0,.64,-.22); }
+{ const g = mkHat('tophat'); accBox(g,.62,.04,.62,0x222222,0,.58,0); accBox(g,.38,.36,.38,0x222222,0,.78,0); accBox(g,.4,.07,.4,0xcc2222,0,.65,0); }
+{ const g = mkHat('cap'); accBox(g,.54,.1,.54,0xcc2222,0,.58,0); accBox(g,.4,.04,.24,0xcc2222,0,.55,-.36); }
+{ const g = mkHat('catears'); for (const x of [-.16,.16]) { accBox(g,.13,.16,.08,0x5a3a1a,x,.68,0,'hair'); accBox(g,.07,.1,.04,0xffaaaa,x,.67,-.04); } }
+const CAPES = {red:0xcc2222, blue:0x2255cc, purple:0x7a3ab0};
+const cape = new THREE.Group(); cape.visible = false; avatar.add(cape);
+const capeMesh = accBox(cape,.46,.9,.05,0xcc2222,0,.95,.19);
+// the lion cub body (same little lion as the pride, just smaller and in your colours)
+const cubG = new THREE.Group(); cubG.rotation.order = 'YXZ'; cubG.visible = false; scene.add(cubG);
+const cubBody = lionLike({fur:0xeec36a}); cubBody.scale.setScalar(.6); cubG.add(cubBody);
+cubBody.traverse(m => { if (m.isMesh && m.material.color.getHex() === 0xeec36a) m.userData.role = 'fur'; });
+const cubAnchor = new THREE.Group(); cubAnchor.position.set(0,.75,-.64); cubAnchor.scale.setScalar(.95); cubBody.add(cubAnchor);
+const hatsCub = {};
+for (const k in hats) { const c = hats[k].clone(true); hatsCub[k] = c; cubAnchor.add(c); }          // hats work on the cub too
+function applyLook(){
+  if (LOOK.body !== lastBody) {
+    lastBody = LOOK.body; const cub = LOOK.body === 'cub';
+    HEIGHT = cub ? .9 : 1.8; EYE = cub ? .85 : 1.6;
+    if (!cub) for (let i=0; i<12 && hits(player.x,player.y,player.z); i++) player.y += .2;        // don't get stuck when growing back
+  }
+  for (const root of [avatar, rHand, lHand, cubG]) root.traverse(m => {
+    if (!m.isMesh) return;
+    const r = m.userData.role;
+    if (r) m.material.color.setHex((LOOK.body === 'cub' && (root === rHand || root === lHand) && (r === 'skin' || r === 'shirt')) ? LOOK.fur : LOOK[r]);
+    if (m.userData.hs) m.visible = LOOK.hairStyle !== 'bald' && (m.userData.hs === 'base' || LOOK.hairStyle === 'long');
+  });
+  for (const k in hats) { hats[k].visible = LOOK.hat === k; hatsCub[k].visible = LOOK.hat === k; }
+  cape.visible = LOOK.cape !== 'none'; if (cape.visible) capeMesh.material.color.setHex(CAPES[LOOK.cape]);
+  try { localStorage.setItem('blockGameLook', JSON.stringify(LOOK)); } catch (err) {}
+}
+applyLook();
+// the panel
+const lookEl = document.createElement('div'); lookEl.id = 'look'; document.body.appendChild(lookEl);
+lookEl.innerHTML = '<h2>Your avatar 🎨</h2><div style="opacity:.8">Pick anything! Click the game (or press C) to go play.</div>';
+const lookRefresh = [];
+function lookRow(label, key, options, isColor){
+  const wrap = document.createElement('div'), t = document.createElement('div'), box = document.createElement('div');
+  t.className = 'lk-t'; t.textContent = label; box.className = 'lk-box'; wrap.append(t, box);
+  const btns = options.map(o => {
+    const b = document.createElement('button'), val = isColor ? o : o[1];
+    if (isColor) { b.className = 'lk-c'; b.style.background = '#' + o.toString(16).padStart(6,'0'); } else { b.className = 'lk-b'; b.textContent = o[0]; }
+    b.onclick = () => { LOOK[key] = val; applyLook(); refresh(); };
+    box.appendChild(b); return {b, val};
+  });
+  const refresh = () => btns.forEach(x => x.b.classList.toggle('on', x.val === LOOK[key]));
+  refresh(); lookRefresh.push(refresh); lookEl.appendChild(wrap);
+}
+const SKINS = [0xffdbb4,0xe8b98a,0xc68642,0x8d5524,0x5c3a21,0xf2c8e0];
+const HAIRS = [0x1a1a1a,0x5a3a1a,0xc89a3a,0xe8d080,0xb5502a,0xdd4488,0x4488ee,0xffffff];
+const SHIRTS = [0x3a7bd5,0xd53a3a,0x3ad56b,0xf2c230,0x9b59b6,0xff8fb3,0x222222,0xffffff];
+const PANTS = [0x2b3a67,0x333333,0x6b4b28,0x2d6a3a,0x7a2a2a,0x888888];
+const FURS = [0xeec36a,0xd2952e,0xf5f0e0,0x9a7a40,0xe08a3a,0xb0b0b8];
+lookRow('Body','body',[['🧍 Human','human'],['🦁 Lion cub','cub']]); lookRow('Cub fur colour','fur',FURS,true);
+lookRow('Skin','skin',SKINS,true); lookRow('Hair colour','hair',HAIRS,true);
+lookRow('Hair style','hairStyle',[['Short','short'],['Long','long'],['Bald','bald']]);
+lookRow('Shirt','shirt',SHIRTS,true); lookRow('Trousers','pants',PANTS,true);
+lookRow('Hat','hat',[['None','none'],['👑 Crown','crown'],['🎩 Top hat','tophat'],['🧢 Cap','cap'],['🐱 Cat ears','catears']]);
+lookRow('Cape','cape',[['None','none'],['Red','red'],['Blue','blue'],['Purple','purple']]);
+const rndBtn = document.createElement('button'); rndBtn.className = 'lk-b big'; rndBtn.textContent = '🎲 Surprise me!';
+rndBtn.onclick = () => {
+  const pick = a => a[Math.random()*a.length|0];
+  Object.assign(LOOK, {skin:pick(SKINS), hair:pick(HAIRS), shirt:pick(SHIRTS), pants:pick(PANTS), hairStyle:pick(['short','long','bald']), hat:pick(['none','crown','tophat','cap','catears']), cape:pick(['none','red','blue','purple'])});
+  applyLook(); lookRefresh.forEach(f => f());
+};
+lookEl.appendChild(rndBtn);
+function toggleLook(){
+  if (!lookOpen) {
+    lookOpen = true; invOpen = true; prevCam = camMode; camMode = 2;       // selfie view so you can see your face
+    if (document.pointerLockElement) document.exitPointerLock(); else { lookEl.style.display = 'block'; msg.style.display = 'none'; }
+  } else {
+    lookOpen = false; invOpen = false; lookEl.style.display = 'none'; camMode = prevCam; renderer.domElement.requestPointerLock();
+  }
+}
+
+// ---------- RIDING YOUR LION (press G next to him) ----------
+const ride = {on:false, lion:null, vy:0, ground:true};
+function toggleRide(){
+  if (ride.on) {                                   // hop off
+    ride.on = false; const pos = ride.lion.g.position;
+    for (let i=0; i<8; i++) {
+      const a = i*Math.PI/4, x = pos.x + Math.cos(a)*1.7, z = pos.z + Math.sin(a)*1.7, y = stand(x,z,pos.y);
+      if (y >= 0 && Math.abs(y-pos.y) < 2 && !hits(x,y,z)) { player.x = x; player.z = z; player.y = y; player.vy = 0; toast('You hopped off 🦁'); return; }
+    }
+    player.y = pos.y + 1.5; player.vy = 0; toast('You hopped off 🦁'); return;
+  }
+  const L = pets.find(p => p.type === 'lion' && p.tamed);
+  if (!L || Math.hypot(L.g.position.x - player.x, L.g.position.z - player.z) > 4) return toast(`Walk up close to ${LION_NAME} first, then press G 🦁`);
+  ride.on = true; ride.lion = L; L.sit = false; ride.vy = 0; ride.ground = true;
+  toast(`🦁 You are riding ${LION_NAME}! W/S = run, look to steer, Space = leap, G = hop off`);
+}
+function rideStep(dt, fwd, side, jump){
+  const L = ride.lion, pos = L.g.position, sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
+  const vx = (-sin*fwd + cos*side)*7, vz = (-cos*fwd - sin*side)*7;            // faster than walking
+  const ok = (nx, nz) => {
+    const ny = stand(nx, nz, pos.y), X = Math.floor(nx), Z = Math.floor(nz);
+    if (nx<1 || nx>W-1 || nz<1 || nz>W-1 || ny < 0 || ny - pos.y > 1.01) return false;
+    return !(pos.y - ny < 1.5 && (get(X,ny+1,Z) || get(X,ny+2,Z)));             // is there room for you on his back?
+  };
+  if (vx && ok(pos.x + vx*dt, pos.z)) pos.x += vx*dt;
+  if (vz && ok(pos.x, pos.z + vz*dt)) pos.z += vz*dt;
+  if (jump && ride.ground) ride.vy = 9;
+  ride.vy -= 25*dt;
+  const g0 = stand(pos.x, pos.z, pos.y); let ny = pos.y + ride.vy*dt;
+  if (g0 >= 0 && ny <= g0) { ny = g0; if (ride.vy < 0) ride.vy = 0; ride.ground = true; } else ride.ground = false;
+  pos.y = ny; L.dir = player.yaw; L.g.rotation.y = player.yaw;
+  player.x = pos.x; player.z = pos.z; player.y = pos.y + 1.05; player.vx = player.vz = player.vy = 0; player.onGround = ride.ground;
 }
 
 // ---------- HOTBAR & INVENTORY ----------
@@ -229,7 +1142,7 @@ let selected = 0, invOpen = false;
 const hud = document.getElementById('hud'), label = document.getElementById('label');
 const inv = document.getElementById('inv'), msg = document.getElementById('msg');
 function icon(cv, id){
-  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; c.clearRect(0,0,16,16);
+  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
   c.fillStyle = '#556'; c.fillRect(0,0,16,16);
   c.drawImage(atlas, BLOCKS[id][2]*16, 0, 16, 16, 0, 0, 16, 16);
 }
@@ -244,7 +1157,7 @@ const slotEls = hotbar.map((_,i) => {
 function select(i){
   selected = i;
   slotEls.forEach((s,n) => s.d.classList.toggle('on', n===i));
-  label.textContent = BLOCKS[hotbar[i]][0];
+  label.textContent = BLOCKS[hotbar[i]][0]; updateHeld();
 }
 function refreshHotbar(){ slotEls.forEach((s,i) => icon(s.cv, hotbar[i])); select(selected); }
 const itemsEl = document.getElementById('items');
@@ -256,58 +1169,122 @@ for (const id in BLOCKS) {
 }
 refreshHotbar();
 addEventListener('wheel', e => select((selected + (e.deltaY>0?1:8)) % 9));
-
 function toggleInv(){
   if (!invOpen) {
     invOpen = true;
     if (document.pointerLockElement) document.exitPointerLock();
     else { inv.style.display = 'flex'; msg.style.display = 'none'; }
-  } else {
-    invOpen = false; inv.style.display = 'none';
-    renderer.domElement.requestPointerLock();
-  }
+  } else { invOpen = false; inv.style.display = 'none'; renderer.domElement.requestPointerLock(); }
 }
 
 // ---------- CONTROLS ----------
 const keys = {};
 addEventListener('keydown', e => {
   keys[e.code] = true;
+  if (ride.on && (e.code === 'KeyZ' || e.code === 'KeyH' || e.code === 'KeyP' || e.code === 'KeyO')) ride.on = false;     // travelling keys get you off the lion
   if (e.code.startsWith('Arrow')) e.preventDefault();
   if (e.code >= 'Digit1' && e.code <= 'Digit9') select(+e.code.slice(5)-1);
   if (e.code === 'KeyM') { bigMap = !bigMap; sizeMap(); }
-  if (e.code === 'KeyE') toggleInv();
-  if (e.code === 'Escape' && invOpen) { invOpen = false; inv.style.display = 'none'; msg.style.display = 'block'; }
+  if (e.code === 'KeyE' && !lookOpen) toggleInv();
+  if (e.code === 'KeyC') toggleLook();
+  if (e.code === 'KeyF') eat();
+  if (e.code === 'KeyT') placeTeddy();
+  if (e.code === 'KeyG') toggleRide();
+  if (e.code === 'KeyZ') { Object.assign(player, {x:zoo.x-19.5, y:zoo.h+1.05, z:zoo.z+.5, vy:0}); toast('🦁 Welcome to the zoo! (H = back home)'); }
+  if (e.code === 'KeyP') { Object.assign(player, {x:PC.x+.5, y:PH+1.05, z:PC.z+17.5, vy:0}); toast('🦁 Welcome to Pride Rock! Climb the stairs on the right (H = home)'); }
+  if (e.code === 'KeyO') { Object.assign(player, {x:ox+12.5, y:MH+1.05, z:oz+22.5, vy:0}); toast('🏰 Welcome home to your mansion! Aryan will come too (H = village)'); }
+  if (e.code === 'KeyH') { Object.assign(player, spawnPos(), {vy:0}); toast('🏡 Back home'); }
+  if (e.code === 'KeyV') { camMode = (camMode+1) % 3; toast(['📷 First person','📷 Behind you','📷 Selfie view'][camMode]); }
+  if (e.code === 'Escape' && invOpen) { if (lookOpen) { camMode = prevCam; lookOpen = false; lookEl.style.display = 'none'; } invOpen = false; inv.style.display = 'none'; msg.style.display = 'block'; }
 });
 addEventListener('keyup', e => keys[e.code] = false);
 renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
 document.addEventListener('pointerlockchange', () => {
   const locked = !!document.pointerLockElement;
-  if (locked) invOpen = false;
-  inv.style.display = !locked && invOpen ? 'flex' : 'none';
+  if (locked) { if (lookOpen) { camMode = prevCam; lookOpen = false; lookEl.style.display = 'none'; } invOpen = false; }
+  inv.style.display = !locked && invOpen && !lookOpen ? 'flex' : 'none';
+  lookEl.style.display = !locked && lookOpen ? 'block' : 'none';
   msg.style.display = !locked && !invOpen ? 'block' : 'none';
 });
 document.addEventListener('pointerlockerror', () => { msg.style.display = 'block'; });
 document.addEventListener('mousemove', e => {
-  if (!document.pointerLockElement) return;
-  player.yaw -= e.movementX * 0.002;
-  player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch - e.movementY * 0.002));
+  // normal: mouse lock. backup: hold the left button and drag if lock is blocked
+  if (!document.pointerLockElement && !(e.buttons & 1 && !invOpen)) return;
+  player.yaw -= e.movementX * 0.003;
+  player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch - e.movementY * 0.003));
 });
 addEventListener('contextmenu', e => e.preventDefault());
 
+// aim: finds the first thing (creature or block) along the line of sight
 function aim() {
-  const dir = new THREE.Vector3(0,0,-1).applyEuler(camera.rotation);
+  const cp = Math.cos(player.pitch), dir = new THREE.Vector3(-Math.sin(player.yaw)*cp, Math.sin(player.pitch), -Math.cos(player.yaw)*cp), org = {x:player.x, y:player.y+EYE, z:player.z}, ents = animals.concat(villagers, pets, teddies, zooAnimals, prideCast, herds);
   let prev = null;
   for (let t=0; t<6; t+=0.05) {
-    const x = Math.floor(camera.position.x + dir.x*t), y = Math.floor(camera.position.y + dir.y*t), z = Math.floor(camera.position.z + dir.z*t);
+    const px = org.x + dir.x*t, py = org.y + dir.y*t, pz = org.z + dir.z*t;
+    const x = Math.floor(px), y = Math.floor(py), z = Math.floor(pz);
     if (get(x,y,z)) return {hit:[x,y,z], prev};
+    for (const e of ents) { const p = e.g.position; if (Math.abs(p.x-px)<.5 && Math.abs(p.z-pz)<.5 && py>p.y-.1 && py<p.y+1.8) return {ent:e}; }
     prev = [x,y,z];
   }
   return null;
 }
 addEventListener('mousedown', e => {
   if (!document.pointerLockElement) return;
+  swing = 1;
   const a = aim(); if (!a) return;
-  if (e.button === 0) setBlock(...a.hit, 0);
+  if (a.ent) {
+    const en = a.ent;
+    if (en.pet) {
+      const emoji = en.type === 'cat' ? '🐱' : en.type === 'lion' ? '🦁' : '🐶';
+      if (e.button === 0) toast("Don't hit pets!");
+      else if (!en.tamed) {
+        if (bag.meat > 0) { bag.meat--; en.tamed = true; en.collar.visible = true; spawnHearts(en.g.position, 5); toast(`You tamed the ${en.type}! ${emoji} It will follow you`); }
+        else toast(`The ${en.type} wants some meat 🥩 (hit a pig, cow or sheep)`);
+      } else { spawnHearts(en.g.position, 3); en.sit = !en.sit; toast(en.sit ? `${emoji} Staying here` : `${emoji} Following you`); }
+      return;
+    }
+    if (en.cast) {
+      if (e.button === 0) toast(`Don't hit ${en.name}!`);
+      else if (en.food && bag.apple > 0) { bag.apple--; spawnHearts(en.g.position, 6); toast(`${en.emoji} ${en.name}: "Yum, thank you!"`); }
+      else { spawnHearts(en.g.position, 2); toast(`${en.emoji} ${en.name}: "${en.lines[Math.random()*en.lines.length|0]}"`); }
+      return;
+    }
+    if (en.zoo) {
+      const nm = en.kind[0].toUpperCase() + en.kind.slice(1);
+      if (e.button === 0) toast("Don't hit the zoo animals!");
+      else if (bag.apple > 0) { bag.apple--; spawnHearts(en.g.position, 6); toast(`${en.emoji} The ${nm} loves the apple!`); }
+      else { spawnHearts(en.g.position, 3); toast(`${en.emoji} A ${nm}! (feed it an apple 🍎)`); }
+      return;
+    }
+    if (en.teddy) {
+      if (e.button === 0) toast("Don't hit the teddy bear!");
+      else { spawnHearts(en.g.position, 4); scene.remove(en.g); teddies.splice(teddies.indexOf(en),1); bag.teddy++; toast('You hugged the teddy 🧸 It is in your bag (T = place it)'); }
+      return;
+    }
+    if (en.vil) {
+      if (e.button === 2) {
+        if (en.give <= 0) { bag.bread++; en.give = 20; spawnHearts(en.g.position, 3); toast('The villager gave you bread! 🍞'); }
+        else toast('Villager: "Come back later!"');
+      } else toast("Don't hit the villagers!");
+    } else if (e.button === 2) {
+      spawnHearts(en.g.position, 3); toast('Aww, so cute! 💕');
+    } else if (e.button === 0) {
+      en.hp--; en.hurt = 2; en.moving = true; en.timer = 2; en.dir = player.yaw;
+      if (en.hp <= 0) { scene.remove(en.g); animals.splice(animals.indexOf(en),1); bag.meat += 2; toast('You got 2 meat! 🥩'); }
+    }
+    return;
+  }
+  const [x,y,z] = a.hit;
+  if (e.button === 0) {
+    const b = get(x,y,z);
+    setBlock(x,y,z,0);
+    if (b === 8 && Math.random() < 0.3) { bag.apple++; toast('An apple fell! 🍎'); }
+    if (b === 11) { bag.bread++; toast('You harvested bread! 🍞');
+      setTimeout(() => { if (!get(x,y,z) && get(x,y-1,z)===2) setBlock(x,y,z,11); }, 25000); }  // wheat grows back
+  }
+  const hb = get(x,y,z);
+  if (e.button === 2 && hb === 12) { useBed(x,y,z); return; }
+  if (e.button === 2 && hb === 13) { useBath(); return; }
   if (e.button === 2 && a.prev) {
     setBlock(...a.prev, hotbar[selected]);
     if (hits(player.x, player.y, player.z)) setBlock(...a.prev, 0);
@@ -315,17 +1292,20 @@ addEventListener('mousedown', e => {
 });
 
 // ---------- GAME LOOP ----------
-let last = performance.now(), clock = 0;
+let last = performance.now(), clock = 0, spawnT = 0;
 function loop(now) {
   requestAnimationFrame(loop);
-  const dt = Math.min((now-last)/1000, 0.05); last = now; clock += dt;
+  const dt = Math.max(0, Math.min((now-last)/1000, 0.05)); last = now; clock += dt;
   const on = !invOpen;
 
-  player.yaw += ((keys.ArrowLeft?1:0) - (keys.ArrowRight?1:0)) * 2 * dt;
-  player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch + ((keys.ArrowUp?1:0) - (keys.ArrowDown?1:0)) * 1.5 * dt));
+  const lookX = (keys.ArrowLeft||keys.KeyJ?1:0) - (keys.ArrowRight||keys.KeyL?1:0);
+  const lookY = (keys.ArrowUp||keys.KeyI?1:0) - (keys.ArrowDown||keys.KeyK?1:0);
+  player.yaw += lookX * 2 * dt;
+  player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch + lookY * 1.5 * dt));
 
   const fwd = on ? (keys.KeyW?1:0) - (keys.KeyS?1:0) : 0, side = on ? (keys.KeyD?1:0) - (keys.KeyA?1:0) : 0;
   const sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
+  if (ride.on) rideStep(dt, fwd, side, on && keys.Space); else {
   player.vx = (-sin*fwd + cos*side) * 5;
   player.vz = (-cos*fwd - sin*side) * 5;
   if (on && keys.Space && player.onGround) { player.vy = 8; player.onGround = false; }
@@ -335,9 +1315,19 @@ function loop(now) {
   const ny = player.y + player.vy*dt;
   if (!hits(player.x, ny, player.z)) { player.y = ny; player.onGround = false; }
   else { if (player.vy < 0) player.onGround = true; player.vy = 0; }
-  if (player.y < -20) { player.x = W/2; player.z = W/2; player.y = heightAt(W/2,W/2)+3; player.vy = 0; }
+  }
+  if (player.y < -20) respawn('You fell out of the world!');
 
-  updateAnimals(dt);
+  // hunger & health
+  food = Math.max(0, food - 0.1*dt);
+  if (food >= 14 && health < 20) { hpT += dt; if (hpT > 3) { hpT = 0; health++; } }
+  else if (food <= 0) { hpT += dt; if (hpT > 4) { hpT = 0; health--; toast('You are starving! Press F to eat'); if (health <= 0) respawn('You fainted from hunger!'); } }
+  else hpT = 0;
+  updateStats();
+  if (toastT > 0 && (toastT -= dt) <= 0) toastEl.textContent = '';
+
+  updateCreatures(dt);
+  if ((spawnT += dt) > 25) { spawnT = 0; if (animals.length < 28) trySpawnAnimal(); }
 
   const ang = clock/120*Math.PI*2 + 0.8;
   const daylight = Math.max(0, Math.min(1, Math.sin(ang)*2 + 0.5));
@@ -346,8 +1336,35 @@ function loop(now) {
   material.color.setScalar(0.3 + 0.7*daylight);
   sun.position.set(camera.position.x + Math.cos(ang)*100, camera.position.y + Math.sin(ang)*100, camera.position.z - 20);
 
-  camera.position.set(player.x, player.y + 1.6, player.z);
-  camera.rotation.set(player.pitch, player.yaw, 0);
+  {
+    const eye = new THREE.Vector3(player.x, player.y + EYE, player.z), cp = Math.cos(player.pitch);
+    if (camMode === 0) { camera.position.copy(eye); camera.rotation.set(player.pitch, player.yaw, 0); }
+    else {
+      const fwdV = new THREE.Vector3(-Math.sin(player.yaw)*cp, Math.sin(player.pitch), -Math.cos(player.yaw)*cp);
+      const away = camMode === 1 ? fwdV.clone().negate() : fwdV;
+      let dist = 4;
+      for (let t=.3; t<4; t+=.15) { const q = eye.clone().addScaledVector(away, t); if (get(Math.floor(q.x),Math.floor(q.y),Math.floor(q.z))) { dist = Math.max(.6, t-.3); break; } }   // don't go inside walls
+      camera.position.copy(eye).addScaledVector(away, dist);
+      if (camMode === 1) camera.rotation.set(player.pitch, player.yaw, 0); else camera.rotation.set(-player.pitch, player.yaw+Math.PI, 0);
+    }
+  }
+  swing = Math.max(0, swing - dt*4);
+  const sw = Math.sin(swing*Math.PI), bob = (fwd || side) ? Math.sin(clock*9)*.015 : 0;
+  rHand.rotation.x = .2 - sw*.9; rHand.position.set(.32, -.3 + bob, -.2 - sw*.1);
+  lHand.rotation.x = .2; lHand.position.set(-.32, -.3 - bob, -.2);
+  const isCub = LOOK.body === 'cub';
+  avatar.visible = camMode !== 0 && !isCub; cubG.visible = camMode !== 0 && isCub; rHand.visible = lHand.visible = camMode === 0;
+  if (isCub) { cubG.position.set(player.x, player.y + ((fwd || side) ? Math.abs(Math.sin(clock*10))*.07 : 0), player.z); cubG.rotation.set(-sw*.35, player.yaw, 0); }
+  document.getElementById('cross').style.display = camMode === 2 ? 'none' : 'block';
+  {
+    const u = avatar.userData, moving = fwd || side, sA = moving ? Math.sin(clock*10)*.7 : 0;
+    avatar.position.set(player.x, player.y, player.z); avatar.rotation.y = player.yaw;
+    if (ride.on) { u.lLeg.rotation.set(-.3,0,-.5); u.rLeg.rotation.set(-.3,0,.5); u.lArm.rotation.x = .9; u.rArm.rotation.x = .9 + sw*1.2; }
+    else { u.lLeg.rotation.set(sA,0,0); u.rLeg.rotation.set(-sA,0,0); u.lArm.rotation.x = -sA*.8; u.rArm.rotation.x = sA*.8 + sw*1.8; }
+    u.head.rotation.x = player.pitch*.8;
+  }
+  updateHearts(dt);
+  camera.updateMatrixWorld(); updateLead();
   renderer.render(scene, camera);
   drawMap();
 }
